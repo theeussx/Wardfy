@@ -1,0 +1,35 @@
+{
+  "name": "wardfy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A social music platform that connects Spotify communities to Discord.",
+  "license": "MIT",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail -n api,web -c cyan,magenta \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:full": "concurrently --kill-others-on-fail -n api,web,bot -c cyan,magenta,yellow \"npm run dev:api\" \"npm run dev:web\" \"npm run dev:bot\"",
+    "dev:web": "npm run dev --workspace=@wardfy/web",
+    "dev:api": "npm run build --workspace=@wardfy/shared && npm run dev --workspace=@wardfy/api",
+    "dev:bot": "npm run build --workspace=@wardfy/shared && npm run dev --workspace=@wardfy/bot",
+    "build": "npm run build --workspace=@wardfy/shared && npm run build --workspace=@wardfy/api && npm run build --workspace=@wardfy/bot && npm run build --workspace=@wardfy/web",
+    "typecheck": "npm run build --workspace=@wardfy/shared && npm run typecheck --workspace=@wardfy/api && npm run typecheck --workspace=@wardfy/bot && npm run typecheck --workspace=@wardfy/web",
+    "db:generate": "npm run db:generate --workspace=@wardfy/api",
+    "db:migrate": "npm run db:migrate --workspace=@wardfy/api",
+    "db:deploy": "npm run db:deploy --workspace=@wardfy/api",
+    "bot:register": "npm run register --workspace=@wardfy/bot",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20.18.0",
+    "npm": ">=10"
+  }
+}

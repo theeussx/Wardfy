@@ -1,0 +1,98 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: wardfy
+      POSTGRES_USER: wardfy
+      POSTGRES_PASSWORD: wardfy
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U wardfy -d wardfy']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    volumes:
+      - redis-data:/data
+    ports:
+      - '6379:6379'
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: build
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://wardfy:wardfy@postgres:5432/wardfy?schema=public
+    command: npm run db:deploy --workspace=@wardfy/api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3001
+      DATABASE_URL: postgresql://wardfy:wardfy@postgres:5432/wardfy?schema=public
+      REDIS_URL: redis://redis:6379
+      APP_ORIGIN: http://localhost:5173
+      API_ORIGIN: http://localhost:3001
+      DEMO_MODE: 'false'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    ports:
+      - '3001:3001'
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - '5173:80'
+
+  bot:
+    build:
+      context: .
+      dockerfile: apps/bot/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      API_ORIGIN: http://api:3001
+      DATABASE_URL: postgresql://wardfy:wardfy@postgres:5432/wardfy?schema=public
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      api:
+        condition: service_started
+    profiles: ['bot']
+
+volumes:
+  postgres-data:
+  redis-data:
