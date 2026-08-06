@@ -1,24 +1,22 @@
 import type { Guild, Message, SendableChannels } from 'discord.js';
 
 import { nowPlayingCard, noticeCard } from '../ui/components-v2.js';
-
-interface ActivityMessageRef {
-  channelId: string;
-  messageId: string;
-}
+import { WardfyApi, type ActivityMessageRef } from './wardfy-api.js';
 
 /**
- * Maintains one editable Components V2 card per listener in the configured
- * channel. A production deployment can swap this map for the ActivityMessage
- * Prisma table without changing Discord rendering behavior.
+ * Persists Discord message references through the API. After a restart the bot
+ * fetches and edits the previous card instead of creating duplicate activity
+ * messages in the configured channel.
  */
 export class ActivityChannelPublisher {
   private readonly messages = new Map<string, ActivityMessageRef>();
 
+  constructor(private readonly api: WardfyApi) {}
+
   async renderPlaying(input: {
     guild: Guild;
     channelId: string;
-    userId: string;
+    discordId: string;
     name: string;
     track: string;
     artist: string;
@@ -28,24 +26,44 @@ export class ActivityChannelPublisher {
     device?: string;
     spotifyUrl: string;
     albumArtUrl?: string;
+    spotifyTrackId?: string;
   }): Promise<void> {
     const channel = await this.resolveChannel(input.guild, input.channelId);
     if (!channel) return;
-    const key = `${input.guild.id}:${input.userId}`;
+    const key = `${input.guild.id}:${input.discordId}`;
     const card = nowPlayingCard(input);
-    const existing = await this.fetchExisting(channel, this.messages.get(key));
+    const reference =
+      this.messages.get(key) ?? (await this.api.activityMessage(input.guild.id, input.discordId));
+    const existing = await this.fetchExisting(channel, reference ?? undefined);
 
     if (existing) {
       await existing.edit({ components: card.components });
+      this.messages.set(key, reference!);
+      await this.api.saveActivityMessage(input.guild.id, {
+        discordId: input.discordId,
+        channelId: channel.id,
+        discordMessageId: existing.id,
+        lastTrackSpotifyId: input.spotifyTrackId,
+      });
       return;
     }
+
     const message = await channel.send(card);
-    this.messages.set(key, { channelId: channel.id, messageId: message.id });
+    const nextReference = {
+      channelId: channel.id,
+      discordMessageId: message.id,
+      lastTrackSpotifyId: input.spotifyTrackId,
+    };
+    this.messages.set(key, nextReference);
+    await this.api.saveActivityMessage(input.guild.id, {
+      discordId: input.discordId,
+      ...nextReference,
+    });
   }
 
-  async renderStopped(guild: Guild, userId: string, name: string): Promise<void> {
-    const key = `${guild.id}:${userId}`;
-    const ref = this.messages.get(key);
+  async renderStopped(guild: Guild, discordId: string, name: string): Promise<void> {
+    const key = `${guild.id}:${discordId}`;
+    const ref = this.messages.get(key) ?? (await this.api.activityMessage(guild.id, discordId));
     if (!ref) return;
     const channel = await this.resolveChannel(guild, ref.channelId);
     const message = channel ? await this.fetchExisting(channel, ref) : null;
@@ -55,7 +73,14 @@ export class ActivityChannelPublisher {
           .components,
       });
     }
-    this.messages.delete(key);
+    // Keep the reference persisted: the next session edits this exact card instead of creating a new message.
+    this.messages.set(key, ref);
+    await this.api.saveActivityMessage(guild.id, {
+      discordId,
+      channelId: ref.channelId,
+      discordMessageId: ref.discordMessageId,
+      lastTrackSpotifyId: ref.lastTrackSpotifyId ?? undefined,
+    });
   }
 
   private async resolveChannel(guild: Guild, channelId: string): Promise<SendableChannels | null> {
@@ -68,6 +93,6 @@ export class ActivityChannelPublisher {
     ref: ActivityMessageRef | undefined,
   ): Promise<Message | null> {
     if (!ref || ref.channelId !== channel.id) return null;
-    return channel.messages.fetch(ref.messageId).catch(() => null);
+    return channel.messages.fetch(ref.discordMessageId).catch(() => null);
   }
 }

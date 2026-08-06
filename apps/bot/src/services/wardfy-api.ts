@@ -11,20 +11,99 @@ interface Envelope<T> {
   data: T;
 }
 
-export class WardfyApi {
-  constructor(private readonly config: BotConfig) {}
+export interface BotProfile {
+  id: string;
+  discordId?: string;
+  name: string;
+  avatarUrl?: string;
+  title: string;
+  level: number;
+  xp: number;
+  nextLevelXp: number;
+  minutes: number;
+  artists: number;
+  streak: number;
+  spotifyConnected: boolean;
+}
 
-  async leaderboard(metric: RankingMetric): Promise<LeaderboardEntry[]> {
-    return this.request<LeaderboardEntry[]>(`/v1/rankings?period=week&metric=${metric}`);
+export interface GuildActivity {
+  userId: string;
+  discordId?: string;
+  displayName: string;
+  avatarUrl?: string;
+  track: {
+    id: string;
+    title: string;
+    artists: string[];
+    album: string;
+    albumArtUrl?: string;
+    durationMs: number;
+    spotifyUrl: string;
+  };
+  progressMs: number;
+  deviceName?: string;
+  updatedAt: string;
+}
+
+export interface ActivityMessageRef {
+  channelId: string;
+  discordMessageId: string;
+  lastTrackSpotifyId?: string | null;
+}
+
+export interface GuildSettings {
+  activityChannelId: string | null;
+  activityUpdateSeconds: number;
+  notificationsEnabled: boolean;
+  automaticRolesEnabled: boolean;
+  allowMemberComparison: boolean;
+}
+
+type ConnectedBotConfig = BotConfig & { BOT_API_TOKEN: string };
+
+export class WardfyApi {
+  constructor(private readonly config: ConnectedBotConfig) {}
+
+  async registerGuild(input: {
+    id: string;
+    name: string;
+    iconUrl?: string;
+    ownerDiscordId?: string;
+  }): Promise<void> {
+    await this.request('/v1/internal/guilds', { method: 'POST', body: JSON.stringify(input) });
   }
 
-  async compatibility(left: string, right: string): Promise<CompatibilityReport> {
-    return this.request<CompatibilityReport>(
-      `/v1/compatibility/${encodeURIComponent(left)}/${encodeURIComponent(right)}`,
+  async registerMember(
+    guildId: string,
+    input: {
+      discordId: string;
+      displayName: string;
+      avatarUrl?: string;
+      role?: 'MEMBER' | 'ADMIN' | 'OWNER';
+    },
+  ): Promise<void> {
+    await this.request(`/v1/internal/guilds/${encodeURIComponent(guildId)}/members`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async leaderboard(guildId: string, metric: RankingMetric): Promise<LeaderboardEntry[]> {
+    return this.request<LeaderboardEntry[]>(
+      `/v1/internal/guilds/${encodeURIComponent(guildId)}/rankings?period=week&metric=${metric}`,
     );
   }
 
-  async challenges(): Promise<
+  async compatibility(leftDiscordId: string, rightDiscordId: string): Promise<CompatibilityReport> {
+    return this.request<CompatibilityReport>(
+      `/v1/internal/users/${encodeURIComponent(leftDiscordId)}/compatibility/${encodeURIComponent(rightDiscordId)}`,
+    );
+  }
+
+  async challenges(
+    guildId: string,
+    discordId: string,
+  ): Promise<
     Array<{
       id: string;
       name: string;
@@ -37,34 +116,80 @@ export class WardfyApi {
       rewardXp: number;
     }>
   > {
-    return this.request('/v1/challenges');
+    return this.request(
+      `/v1/internal/guilds/${encodeURIComponent(guildId)}/users/${encodeURIComponent(discordId)}/challenges`,
+    );
   }
 
-  async guildSettings(guildId: string): Promise<{
-    activityChannelId: string | null;
-    activityUpdateSeconds: number;
-    notificationsEnabled: boolean;
-  }> {
-    return this.request(`/v1/guilds/${encodeURIComponent(guildId)}/settings`);
+  async joinChallenge(discordId: string, challengeId: string): Promise<void> {
+    await this.request(
+      `/v1/internal/users/${encodeURIComponent(discordId)}/challenges/${encodeURIComponent(challengeId)}/join`,
+      { method: 'POST' },
+    );
+  }
+
+  async recommend(
+    fromDiscordId: string,
+    toDiscordId: string,
+    input: { trackLabel: string; spotifyTrackUrl: string; note?: string },
+  ): Promise<void> {
+    await this.request(
+      `/v1/internal/users/${encodeURIComponent(fromDiscordId)}/recommendations/${encodeURIComponent(toDiscordId)}`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  }
+
+  async profile(discordId: string): Promise<BotProfile | null> {
+    return this.request<BotProfile | null>(
+      `/v1/internal/users/${encodeURIComponent(discordId)}/profile`,
+    );
+  }
+
+  async syncPlayback(discordId: string): Promise<PlaybackSnapshot> {
+    return this.request(`/v1/internal/users/${encodeURIComponent(discordId)}/sync-playback`, {
+      method: 'POST',
+    });
+  }
+
+  async activity(guildId: string): Promise<GuildActivity[]> {
+    return this.request(`/v1/internal/guilds/${encodeURIComponent(guildId)}/activity`);
+  }
+
+  async guildSettings(guildId: string): Promise<GuildSettings> {
+    return this.request(`/v1/internal/guilds/${encodeURIComponent(guildId)}/settings`);
   }
 
   async updateGuildSettings(
     guildId: string,
     settings: { activityChannelId?: string | null; activityUpdateSeconds?: number },
   ): Promise<void> {
-    await this.request(`/v1/guilds/${encodeURIComponent(guildId)}/settings`, {
+    await this.request(`/v1/internal/guilds/${encodeURIComponent(guildId)}/settings`, {
       method: 'PATCH',
       body: JSON.stringify(settings),
     });
   }
 
-  async publishPlayback(
-    snapshot: PlaybackSnapshot & { guildId: string; displayName: string },
+  async activityMessage(guildId: string, discordId: string): Promise<ActivityMessageRef | null> {
+    return this.request(
+      `/v1/internal/guilds/${encodeURIComponent(guildId)}/activity-messages/${encodeURIComponent(discordId)}`,
+    );
+  }
+
+  async saveActivityMessage(
+    guildId: string,
+    input: ActivityMessageRef & { discordId: string },
   ): Promise<void> {
-    await this.request('/v1/events/listening', {
-      method: 'POST',
-      body: JSON.stringify(snapshot),
+    await this.request(`/v1/internal/guilds/${encodeURIComponent(guildId)}/activity-messages`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
     });
+  }
+
+  async removeActivityMessage(guildId: string, discordId: string): Promise<void> {
+    await this.request(
+      `/v1/internal/guilds/${encodeURIComponent(guildId)}/activity-messages/${encodeURIComponent(discordId)}`,
+      { method: 'DELETE' },
+    );
   }
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -73,11 +198,12 @@ export class WardfyApi {
       headers: {
         Accept: 'application/json',
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(this.config.BOT_API_TOKEN ? { 'x-wardfy-bot-token': this.config.BOT_API_TOKEN } : {}),
+        'x-wardfy-bot-token': this.config.BOT_API_TOKEN,
         ...init.headers,
       },
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(15_000),
     });
+    if (response.status === 204) return undefined as T;
     if (!response.ok) {
       const error = await response.text();
       throw new Error(`Wardfy API request ${path} failed (${response.status}): ${error}`);

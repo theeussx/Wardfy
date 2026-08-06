@@ -1,19 +1,16 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
-import type { AppConfig } from '../config.js';
-import type { Cache } from '../lib/cache.js';
 import { AppError } from '../lib/app-error.js';
-import { ActivityBus, type ActivityUpdate } from '../services/activity-bus.js';
-import {
-  buildDemoActivity,
-  demoCompatibility,
-  demoDashboard,
-  getDemoLeaderboard,
-} from '../services/demo-data.js';
+import type { Cache } from '../lib/cache.js';
+import { requireSession } from '../lib/request-auth.js';
+import { SessionSigner } from '../lib/session.js';
+import { ActivityBus } from '../services/activity-bus.js';
+import { WardfyDataService, type DashboardPeriod } from '../services/wardfy-data.service.js';
 
 interface DashboardRouteOptions {
-  config: AppConfig;
+  sessions: SessionSigner;
+  data: WardfyDataService;
   cache: Cache;
   activityBus: ActivityBus;
 }
@@ -22,29 +19,7 @@ const periodSchema = z.enum(['day', 'week', 'month', 'year', 'all']).default('we
 const metricSchema = z
   .enum(['listeningMinutes', 'artists', 'tracks', 'discoveries', 'genres', 'sessions'])
   .default('listeningMinutes');
-
-const playbackSchema = z.object({
-  guildId: z.string().min(1).max(32).optional(),
-  displayName: z.string().min(1).max(80).optional(),
-  userId: z.string().min(1).max(64),
-  isPlaying: z.boolean(),
-  progressMs: z.number().int().min(0),
-  deviceName: z.string().max(100).optional(),
-  deviceType: z.string().max(50).optional(),
-  updatedAt: z.string().datetime(),
-  track: z
-    .object({
-      id: z.string().min(1).max(128),
-      title: z.string().min(1).max(256),
-      artists: z.array(z.string().min(1).max(256)).max(20),
-      album: z.string().min(1).max(256),
-      albumArtUrl: z.string().url().optional(),
-      spotifyUrl: z.string().url(),
-      durationMs: z.number().int().positive(),
-      popularity: z.number().int().min(0).max(100).optional(),
-    })
-    .optional(),
-});
+const guildQuery = z.object({ guildId: z.string().min(1).max(32).optional() });
 
 const guildSettingsSchema = z.object({
   activityChannelId: z.string().max(32).nullable().optional(),
@@ -55,28 +30,60 @@ const guildSettingsSchema = z.object({
   locale: z.string().min(2).max(12).optional(),
 });
 
-const demoGuildSettings = {
-  activityChannelId: '1234567890',
-  activityChannelName: '🎧-tocando-agora',
-  activityUpdateSeconds: 30,
-  notificationsEnabled: true,
-  automaticRolesEnabled: false,
-  allowMemberComparison: true,
-  locale: 'pt-BR',
-};
+const challengeSchema = z.object({
+  name: z.string().min(3).max(80),
+  description: z.string().min(3).max(300),
+  icon: z.string().min(1).max(12).default('🎯'),
+  metric: z.enum([
+    'UNIQUE_ARTISTS',
+    'UNIQUE_GENRES',
+    'UNIQUE_TRACKS',
+    'LISTENING_MINUTES',
+    'STREAK_DAYS',
+    'DISCOVERIES',
+  ]),
+  target: z.number().int().positive().max(100_000),
+  endsAt: z.string().datetime(),
+  rewardXp: z.number().int().min(0).max(100_000).default(100),
+});
 
 export const dashboardRoutes: FastifyPluginAsync<DashboardRouteOptions> = async (app, options) => {
-  app.get('/dashboard', async () => ({
-    data: demoDashboard,
-    meta: {
-      mode: options.config.DEMO_MODE ? 'demo' : 'connected',
-      generatedAt: new Date().toISOString(),
-    },
-  }));
+  app.get('/dashboard', async (request) => {
+    const session = requireSession(request, options.sessions);
+    const { guildId } = guildQuery.parse(request.query);
+    const cacheKey = `dashboard:${session.userId}:${guildId ?? 'personal'}`;
+    const cached = await getCached<Awaited<ReturnType<WardfyDataService['getDashboard']>>>(
+      options.cache,
+      cacheKey,
+    );
+    if (cached) return { data: cached };
+    const data = await options.data.getDashboard(session.userId, guildId);
+    void options.cache.set(cacheKey, data, 8).catch(() => undefined);
+    return { data };
+  });
 
-  app.get('/activity', async () => ({ data: buildDemoActivity() }));
+  app.get('/activity', async (request) => {
+    const session = requireSession(request, options.sessions);
+    const { guildId } = guildQuery.parse(request.query);
+    if (!guildId) {
+      const dashboard = await options.data.getDashboard(session.userId);
+      return { data: dashboard.nowPlaying.isPlaying ? [dashboard.nowPlaying] : [] };
+    }
+    // getDashboard verifies membership before activity is exposed.
+    await options.data.getDashboard(session.userId, guildId);
+    return { data: await options.data.getGuildLiveActivity(guildId) };
+  });
 
-  app.get('/activity/stream', async (_request, reply) => {
+  app.get('/activity/stream', async (request, reply) => {
+    const session = requireSession(request, options.sessions);
+    const { guildId } = guildQuery.parse(request.query);
+    const dashboard = await options.data.getDashboard(session.userId, guildId);
+    const initial = guildId
+      ? await options.data.getGuildLiveActivity(guildId)
+      : dashboard.nowPlaying.isPlaying
+        ? [dashboard.nowPlaying]
+        : [];
+
     reply.hijack();
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -84,13 +91,15 @@ export const dashboardRoutes: FastifyPluginAsync<DashboardRouteOptions> = async 
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
     });
-    reply.raw.write(`event: snapshot\ndata: ${JSON.stringify(buildDemoActivity())}\n\n`);
+    reply.raw.write(`event: snapshot\ndata: ${JSON.stringify(initial)}\n\n`);
 
     const unsubscribe = options.activityBus.subscribe((update) => {
+      if ((guildId && update.guildId !== guildId) || (!guildId && update.userId !== session.userId))
+        return;
       reply.raw.write(`event: playback\ndata: ${JSON.stringify(update)}\n\n`);
     });
     const keepAlive = setInterval(() => reply.raw.write(': keepalive\n\n'), 25_000);
-    _request.raw.on('close', () => {
+    request.raw.on('close', () => {
       clearInterval(keepAlive);
       unsubscribe();
       reply.raw.end();
@@ -98,59 +107,93 @@ export const dashboardRoutes: FastifyPluginAsync<DashboardRouteOptions> = async 
   });
 
   app.get('/rankings', async (request) => {
-    const query = z.object({ period: periodSchema, metric: metricSchema }).parse(request.query);
-    const cacheKey = `ranking:${query.period}:${query.metric}`;
-    const cached = await cacheGet(options.cache, cacheKey);
-    const data = cached ?? getDemoLeaderboard(query.metric);
-    if (!cached) void options.cache.set(cacheKey, data, 45).catch(() => undefined);
-    return { data, meta: { period: query.period, metric: query.metric } };
+    const session = requireSession(request, options.sessions);
+    const query = z
+      .object({ guildId: z.string().min(1).max(32), period: periodSchema, metric: metricSchema })
+      .parse(request.query);
+    const cacheKey = `ranking:${query.guildId}:${query.period}:${query.metric}`;
+    const cached = await getCached<Awaited<ReturnType<WardfyDataService['getRankings']>>>(
+      options.cache,
+      cacheKey,
+    );
+    const data =
+      cached ??
+      (await options.data.getRankings(
+        session.userId,
+        query.guildId,
+        query.period as DashboardPeriod,
+        query.metric,
+      ));
+    if (!cached) void options.cache.set(cacheKey, data, 30).catch(() => undefined);
+    return { data, meta: { period: query.period, metric: query.metric, guildId: query.guildId } };
   });
 
-  app.get('/challenges', async () => ({ data: demoDashboard.challenges }));
+  app.get('/challenges', async (request) => {
+    const session = requireSession(request, options.sessions);
+    const { guildId } = guildQuery.parse(request.query);
+    if (guildId) await options.data.getDashboard(session.userId, guildId);
+    return { data: await options.data.getChallenges(session.userId, guildId) };
+  });
 
-  app.get('/compatibility/:left/:right', async (request) => {
-    const params = z
-      .object({ left: z.string().min(1), right: z.string().min(1) })
-      .parse(request.params);
+  app.post('/guilds/:guildId/challenges', async (request) => {
+    const session = requireSession(request, options.sessions);
+    const { guildId } = z.object({ guildId: z.string().min(1).max(32) }).parse(request.params);
+    const input = challengeSchema.parse(request.body);
     return {
-      data: demoCompatibility,
-      meta: { left: params.left, right: params.right },
+      data: await options.data.createChallenge(session.userId, guildId, {
+        ...input,
+        endsAt: new Date(input.endsAt),
+      }),
     };
   });
 
+  app.post('/challenges/:challengeId/join', async (request, reply) => {
+    const session = requireSession(request, options.sessions);
+    const { challengeId } = z.object({ challengeId: z.string().min(1) }).parse(request.params);
+    await options.data.joinChallenge(session.userId, challengeId);
+    return reply.code(204).send();
+  });
+
+  app.get('/compatibility/:discordId', async (request) => {
+    const session = requireSession(request, options.sessions);
+    const { discordId } = z.object({ discordId: z.string().min(1).max(32) }).parse(request.params);
+    return { data: await options.data.getCompatibility(session.userId, discordId) };
+  });
+
   app.get('/guilds/:guildId/settings', async (request) => {
-    z.object({ guildId: z.string().min(1).max(32) }).parse(request.params);
-    return { data: demoGuildSettings };
+    const session = requireSession(request, options.sessions);
+    const { guildId } = z.object({ guildId: z.string().min(1).max(32) }).parse(request.params);
+    await assertCanManage(options.data, session.userId, guildId);
+    return { data: await options.data.getGuildSettings(guildId) };
   });
 
   app.patch('/guilds/:guildId/settings', async (request) => {
-    z.object({ guildId: z.string().min(1).max(32) }).parse(request.params);
+    const session = requireSession(request, options.sessions);
+    const { guildId } = z.object({ guildId: z.string().min(1).max(32) }).parse(request.params);
+    await assertCanManage(options.data, session.userId, guildId);
     const update = guildSettingsSchema.parse(request.body);
-    Object.assign(demoGuildSettings, update);
-    return { data: demoGuildSettings };
-  });
-
-  app.post('/events/listening', async (request, reply) => {
-    assertBotRequest(request.headers['x-wardfy-bot-token'], options.config);
-    const update = playbackSchema.parse(request.body) as ActivityUpdate;
-    options.activityBus.publish(update);
-    return reply.code(202).send({ data: { accepted: true, receivedAt: new Date().toISOString() } });
+    return { data: await options.data.updateGuildSettings(guildId, update) };
   });
 };
 
-async function cacheGet<T>(cache: Cache, key: string): Promise<T | null> {
+async function getCached<T>(cache: Cache, key: string): Promise<T | null> {
   try {
     return await cache.get<T>(key);
   } catch {
-    // Cache is an optimisation, never the source of truth.
     return null;
   }
 }
 
-function assertBotRequest(token: string | string[] | undefined, config: AppConfig): void {
-  if (config.DEMO_MODE && !config.BOT_API_TOKEN) return;
-  const candidate = Array.isArray(token) ? token[0] : token;
-  if (!candidate || candidate !== config.BOT_API_TOKEN) {
-    throw new AppError('This endpoint is reserved for the Wardfy bot.', 401, 'BOT_AUTH_REQUIRED');
+async function assertCanManage(
+  data: WardfyDataService,
+  userId: string,
+  guildId: string,
+): Promise<void> {
+  if (!(await data.canManageGuild(userId, guildId))) {
+    throw new AppError(
+      'Você precisa de permissão de administrador neste servidor.',
+      403,
+      'GUILD_ADMIN_REQUIRED',
+    );
   }
 }

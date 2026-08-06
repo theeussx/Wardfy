@@ -128,6 +128,7 @@ export function compatibilityCard(
   left: string,
   right: string,
   report: CompatibilityReport,
+  targetDiscordId: string,
 ): ComponentsV2Reply {
   const sharedArtists = report.sharedArtists.slice(0, 4).map(safe).join(' · ');
   const sharedGenres = report.sharedGenres.slice(0, 4).map(safe).join(' · ');
@@ -151,7 +152,7 @@ export function compatibilityCard(
     .addActionRowComponents(
       new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
-          .setCustomId('wardfy:recommend:open')
+          .setCustomId(`wardfy:recommend:open:${targetDiscordId}`)
           .setLabel('Recomendar uma faixa')
           .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
@@ -176,7 +177,7 @@ export function challengeCard(challenge: {
 }): ComponentsV2Reply {
   const percent = Math.min(100, Math.round((challenge.progress / challenge.target) * 100));
   const container = new ContainerBuilder()
-    .setAccentColor(0xf4b942)
+    .setAccentColor(0x0ea5e9)
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
         `## ${challenge.icon} ${safe(challenge.name)}\n${safe(challenge.description)}`,

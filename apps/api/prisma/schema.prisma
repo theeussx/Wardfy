@@ -49,95 +49,102 @@ enum AuditAction {
   TOKEN_REVOKED
 }
 
+enum RecommendationStatus {
+  PENDING
+  ACCEPTED
+  DISMISSED
+}
+
 model User {
-  id                String            @id @default(cuid())
-  discordId         String?           @unique
-  spotifyId         String?           @unique
-  displayName       String
-  avatarUrl         String?
-  locale            String            @default("pt-BR")
-  timezone          String            @default("UTC")
-  xp                Int               @default(0)
-  level             Int               @default(1)
-  title             String?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  spotifyAccount    SpotifyAccount?
-  memberships       GuildMember[]
-  listeningEvents   ListeningEvent[]
-  dailyStats        UserDailyStat[]
-  achievements      UserAchievement[]
-  challengeProgress UserChallenge[]
-  activityMessages  ActivityMessage[]
-  actedAuditLogs    AuditLog[]        @relation("AuditActor")
+  id                 String            @id @default(cuid())
+  discordId          String?           @unique
+  spotifyId          String?           @unique
+  displayName        String
+  avatarUrl          String?
+  locale             String            @default("pt-BR")
+  timezone           String            @default("UTC")
+  xp                 Int               @default(0)
+  level              Int               @default(1)
+  title              String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  spotifyAccount     SpotifyAccount?
+  memberships        GuildMember[]
+  listeningEvents    ListeningEvent[]
+  dailyStats         UserDailyStat[]
+  achievements       UserAchievement[]
+  challengeProgress  UserChallenge[]
+  activityMessages   ActivityMessage[]
+  recommendationsSent Recommendation[]  @relation("RecommendationsSent")
+  recommendationsReceived Recommendation[] @relation("RecommendationsReceived")
+  actedAuditLogs     AuditLog[]        @relation("AuditActor")
 
   @@index([spotifyId])
   @@index([discordId])
 }
 
 model SpotifyAccount {
-  id                     String    @id @default(cuid())
-  userId                 String    @unique
-  spotifyUserId          String    @unique
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  spotifyUserId          String   @unique
   accessTokenCiphertext  String
   refreshTokenCiphertext String
-  scopes                 String[]  @default([])
+  scopes                 String[] @default([])
   expiresAt              DateTime
   profile                Json?
   lastSyncAt             DateTime?
   lastPlaybackAt         DateTime?
-  tokenVersion           Int       @default(1)
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
-  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenVersion           Int      @default(1)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
   @@index([lastSyncAt])
 }
 
 model Guild {
-  id               String            @id
-  name             String
-  iconUrl          String?
-  ownerId          String?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  settings         GuildSettings?
-  members          GuildMember[]
-  challenges       Challenge[]
-  events           ListeningEvent[]
-  activityLog      AuditLog[]
-  activityMessages ActivityMessage[]
+  id          String         @id
+  name        String
+  iconUrl     String?
+  ownerId     String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  settings    GuildSettings?
+  members     GuildMember[]
+  challenges  Challenge[]
+  events      ListeningEvent[]
+  activityLog AuditLog[]
 }
 
 model GuildSettings {
-  id                    String   @id @default(cuid())
-  guildId               String   @unique
-  activityChannelId     String?
-  activityMessageId     String?
-  activityUpdateSeconds Int      @default(30)
-  rankingChannelId      String?
-  notificationsEnabled  Boolean  @default(true)
-  automaticRolesEnabled Boolean  @default(false)
-  roleRules             Json?
-  locale                String   @default("pt-BR")
-  dashboardTheme        String   @default("aurora")
-  allowMemberComparison Boolean  @default(true)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  guild                 Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  id                     String   @id @default(cuid())
+  guildId                String   @unique
+  activityChannelId      String?
+  activityMessageId      String?
+  activityUpdateSeconds  Int      @default(30)
+  rankingChannelId       String?
+  notificationsEnabled   Boolean  @default(true)
+  automaticRolesEnabled  Boolean  @default(false)
+  roleRules              Json?
+  locale                 String   @default("pt-BR")
+  dashboardTheme         String   @default("aurora")
+  allowMemberComparison  Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  guild                  Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
 }
 
 model GuildMember {
-  id         String         @id @default(cuid())
-  guildId    String
-  userId     String
-  nickname   String?
-  role       MembershipRole @default(MEMBER)
-  joinedAt   DateTime       @default(now())
-  lastSeenAt DateTime?
-  guild      Guild          @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String         @id @default(cuid())
+  guildId     String
+  userId      String
+  nickname    String?
+  role        MembershipRole @default(MEMBER)
+  joinedAt    DateTime       @default(now())
+  lastSeenAt  DateTime?
+  guild       Guild          @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([guildId, userId])
   @@index([guildId, joinedAt])
@@ -145,23 +152,23 @@ model GuildMember {
 }
 
 model Track {
-  id             String           @id @default(cuid())
-  spotifyId      String           @unique
-  name           String
-  albumName      String
+  id            String            @id @default(cuid())
+  spotifyId     String            @unique
+  name          String
+  albumName     String
   albumSpotifyId String?
-  albumImageUrl  String?
-  artists        Json
-  genres         String[]         @default([])
-  durationMs     Int
-  popularity     Int?
-  releaseDate    DateTime?
-  explicit       Boolean          @default(false)
-  spotifyUrl     String
-  audioFeatures  Json?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  events         ListeningEvent[]
+  albumImageUrl String?
+  artists       Json
+  genres        String[]          @default([])
+  durationMs    Int
+  popularity    Int?
+  releaseDate   DateTime?
+  explicit      Boolean           @default(false)
+  spotifyUrl    String
+  audioFeatures Json?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  events        ListeningEvent[]
 
   @@index([popularity])
   @@index([releaseDate])
@@ -189,7 +196,7 @@ model ListeningEvent {
 }
 
 model UserDailyStat {
-  userId              String
+  userId              String   
   date                DateTime @db.Date
   listeningMinutes    Int      @default(0)
   uniqueTracks        Int      @default(0)
@@ -235,22 +242,22 @@ model UserAchievement {
 }
 
 model Challenge {
-  id           String          @id @default(cuid())
-  guildId      String?
-  name         String
-  description  String
-  icon         String
-  metric       ChallengeMetric
-  target       Int
-  startsAt     DateTime
-  endsAt       DateTime
-  status       ChallengeStatus @default(ACTIVE)
-  rewardXp     Int             @default(0)
-  metadata     Json?
-  createdById  String?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  guild        Guild?          @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  id          String          @id @default(cuid())
+  guildId     String?
+  name        String
+  description String
+  icon        String
+  metric      ChallengeMetric
+  target      Int
+  startsAt    DateTime
+  endsAt      DateTime
+  status      ChallengeStatus @default(ACTIVE)
+  rewardXp    Int             @default(0)
+  metadata    Json?
+  createdById String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  guild       Guild?          @relation(fields: [guildId], references: [id], onDelete: Cascade)
   participants UserChallenge[]
 
   @@index([guildId, status, endsAt])
@@ -270,28 +277,53 @@ model UserChallenge {
   @@index([challengeId, progress])
 }
 
+model Recommendation {
+  id             String               @id @default(cuid())
+  fromUserId     String
+  toUserId       String
+  spotifyTrackUrl String
+  trackLabel     String
+  note           String?
+  status         RecommendationStatus @default(PENDING)
+  createdAt      DateTime             @default(now())
+  readAt         DateTime?
+  fromUser       User                 @relation("RecommendationsSent", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser         User                 @relation("RecommendationsReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([toUserId, status, createdAt])
+  @@index([fromUserId, createdAt])
+}
+
 model ActivityMessage {
-  id                 String   @id @default(cuid())
-  guildId            String
-  userId             String
-  channelId          String
-  discordMessageId   String
+  id                String   @id @default(cuid())
+  guildId           String
+  userId            String
+  channelId         String
+  discordMessageId  String
   lastTrackSpotifyId String?
-  lastRenderedAt     DateTime @updatedAt
-  guild              Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastRenderedAt    DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  guild             Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([guildId, userId])
+  @@index([channelId])
 }
 
 model AuditLog {
-  id        String      @id @default(cuid())
-  guildId   String
-  actorId   String
-  action    AuditAction
-  details   Json?
-  createdAt DateTime    @default(now())
-  guild     Guild       @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  actor     User        @relation("AuditActor", fields: [actorId], references: [id], onDelete: Cascade)
+  id          String      @id @default(cuid())
+  guildId     String?
+  actorUserId String?
+  action      AuditAction
+  targetType  String?
+  targetId    String?
+  payload     Json?
+  ipHash      String?
+  createdAt   DateTime    @default(now())
+  guild       Guild?      @relation(fields: [guildId], references: [id], onDelete: SetNull)
+  actor       User?       @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([guildId, createdAt])
-  @@index([actorId, createdAt])
+  @@index([actorUserId, createdAt])
 }

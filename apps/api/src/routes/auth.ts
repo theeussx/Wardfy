@@ -8,6 +8,7 @@ import { SignedState } from '../lib/signed-state.js';
 import type { UserRepository } from '../repositories/user.repository.js';
 import { DiscordOAuthService } from '../services/discord-oauth.service.js';
 import { SpotifyOAuthService } from '../services/spotify-oauth.service.js';
+import { WardfyDataService } from '../services/wardfy-data.service.js';
 
 interface AuthRouteOptions {
   config: AppConfig;
@@ -16,6 +17,7 @@ interface AuthRouteOptions {
   spotify: SpotifyOAuthService;
   discord: DiscordOAuthService;
   users: UserRepository;
+  data: WardfyDataService;
 }
 
 const startQuery = z.object({ returnTo: z.string().max(200).optional() });
@@ -58,6 +60,14 @@ export const authRoutes: FastifyPluginAsync<AuthRouteOptions> = async (app, opti
     }
 
     await options.spotify.exchangeAndStore(code, session.userId);
+    // Backfill the Spotify history that is available to the connected account.
+    // A transient Spotify failure must not invalidate a successfully completed OAuth flow.
+    await options.data.syncLibrary(session.userId).catch((syncError) => {
+      request.log.warn(
+        syncError,
+        'Spotify connected, but initial library sync will retry in the worker.',
+      );
+    });
     reply.clearCookie('wardfy_spotify_oauth', cookieOptions);
     return reply.redirect(
       toAppUrl(options.config.APP_ORIGIN, oauthState.returnTo, 'spotify=connected'),
@@ -83,7 +93,7 @@ export const authRoutes: FastifyPluginAsync<AuthRouteOptions> = async (app, opti
       throw new AppError('Discord OAuth state could not be verified.', 400, 'INVALID_OAUTH_STATE');
     }
     const oauthState = options.state.verify(state, 'discord');
-    const profile = await options.discord.exchangeCode(code);
+    const { profile, guilds } = await options.discord.exchangeCode(code);
     const avatarUrl = profile.avatar
       ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png?size=128`
       : undefined;
@@ -93,6 +103,7 @@ export const authRoutes: FastifyPluginAsync<AuthRouteOptions> = async (app, opti
       avatarUrl,
       locale: profile.locale,
     });
+    await options.data.syncDiscordGuildMemberships(user.id, profile.id, guilds);
 
     reply
       .setCookie('wardfy_session', options.sessions.issue(user.id, profile.id), {

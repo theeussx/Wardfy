@@ -7,10 +7,10 @@ import {
   Sparkles,
   TrendingUp,
 } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 import { TimelineChart } from '../components/Charts';
 import { Heatmap } from '../components/Heatmap';
-import { historyTimeline } from '../data/demo';
 import type { DashboardData } from '../types';
 
 export function HistoryView({
@@ -20,103 +20,104 @@ export function HistoryView({
   data: DashboardData;
   onToast: (text: string) => void;
 }) {
+  const yearMinutes = data.history.reduce((sum, item) => sum + item.minutes, 0);
+  const discoveries = data.history.reduce((sum, item) => sum + item.discoveries, 0);
+  const uniqueTracks = Number(
+    data.stats.find((stat) => stat.label.includes('MÚSICAS'))?.value.replace(/\D/g, '') ?? 0,
+  );
+  const peak = [...data.history].sort((left, right) => right.minutes - left.minutes)[0];
   return (
     <div className="page-stack history-view">
       <section className="history-hero surface-card">
         <div>
-          <p className="eyebrow">WRAPPED CONTÍNUO · 2026</p>
+          <p className="eyebrow">WRAPPED CONTÍNUO</p>
           <h2>
             Não espere dezembro para
             <br />
             <em>entender sua história.</em>
           </h2>
-          <p>Wardfy transforma sua rotina de escuta em uma memória viva — todos os dias.</p>
+          <p>
+            Seu histórico é construído pelas escutas que Spotify disponibiliza e pelas novas sessões
+            registradas pelo Wardfy.
+          </p>
         </div>
         <div className="history-hero__month">
-          <small>AGOSTO</small>
-          <b>04</b>
+          <small>PERÍODO</small>
+          <b>{data.history.length}</b>
           <span>
-            dias de música
+            meses com dados
             <br />
-            neste mês
+            na linha do tempo
           </span>
           <i>↗</i>
         </div>
       </section>
-
       <section className="history-stat-row">
-        <article className="surface-card">
-          <span className="history-stat-icon violet">
-            <Clock3 size={19} />
-          </span>
-          <div>
-            <p>MINUTOS NO ANO</p>
-            <b>27.834</b>
-            <span>
-              <ArrowUpRight size={13} /> 14% vs. 2025
-            </span>
-          </div>
-        </article>
-        <article className="surface-card">
-          <span className="history-stat-icon lime">
-            <Compass size={19} />
-          </span>
-          <div>
-            <p>ARTISTAS CONHECIDOS</p>
-            <b>1.289</b>
-            <span>
-              <ArrowUpRight size={13} /> 206 novos
-            </span>
-          </div>
-        </article>
-        <article className="surface-card">
-          <span className="history-stat-icon orange">
-            <Sparkles size={19} />
-          </span>
-          <div>
-            <p>DESCOBERTAS</p>
-            <b>358</b>
-            <span>
-              <ArrowUpRight size={13} /> 28 este mês
-            </span>
-          </div>
-        </article>
-        <article className="surface-card">
-          <span className="history-stat-icon blue">
-            <TrendingUp size={19} />
-          </span>
-          <div>
-            <p>SESSÃO MÉDIA</p>
-            <b>46 min</b>
-            <span>+8 min vs. 2025</span>
-          </div>
-        </article>
+        <HistoryStat
+          icon={<Clock3 size={19} />}
+          color="blue"
+          label="MINUTOS REGISTRADOS"
+          value={yearMinutes.toLocaleString('pt-BR')}
+          detail="na sua linha do tempo"
+        />
+        <HistoryStat
+          icon={<Compass size={19} />}
+          color="cyan"
+          label="GÊNEROS NO DNA"
+          value={String(data.genreDna.length)}
+          detail="com dados disponíveis"
+        />
+        <HistoryStat
+          icon={<Sparkles size={19} />}
+          color="sky"
+          label="DESCOBERTAS"
+          value={discoveries.toLocaleString('pt-BR')}
+          detail="faixas novas registradas"
+        />
+        <HistoryStat
+          icon={<TrendingUp size={19} />}
+          color="navy"
+          label="FAIXAS DISTINTAS"
+          value={uniqueTracks.toLocaleString('pt-BR')}
+          detail="nesta semana"
+        />
       </section>
-
       <section className="surface-card history-chart-card">
         <div className="card-heading">
           <div>
-            <p className="eyebrow">EVOLUÇÃO NO ANO</p>
+            <p className="eyebrow">EVOLUÇÃO</p>
             <h3>Minutos que viraram memória</h3>
           </div>
           <div className="chart-legend">
             <span>
               <i /> Minutos
             </span>
-            <button onClick={() => onToast('Período alterado para 2026.')}>2026 ▾</button>
           </div>
         </div>
-        <TimelineChart data={historyTimeline} />
+        {data.history.some((item) => item.minutes > 0) ? (
+          <TimelineChart data={data.history} />
+        ) : (
+          <EmptyHistory text="A linha do tempo começa após a primeira sincronização de escutas." />
+        )}
         <div className="history-chart-card__footer">
           <span>
-            <b>Junho</b> foi seu mês mais intenso: 4.210 min.
+            {peak?.minutes ? (
+              <>
+                <b>{peak.month}</b> é seu mês mais intenso até agora.
+              </>
+            ) : (
+              'Continue ouvindo para descobrir seu período mais intenso.'
+            )}
           </span>
-          <button onClick={() => onToast('Relatório anual gerado.')}>
-            Ver relatório <Download size={14} />
+          <button
+            onClick={() =>
+              onToast('Exportação de recap estará disponível quando houver dados suficientes.')
+            }
+          >
+            Exportar <Download size={14} />
           </button>
         </div>
       </section>
-
       <section className="history-bottom-grid">
         <article className="surface-card">
           <div className="card-heading">
@@ -124,78 +125,83 @@ export function HistoryView({
               <p className="eyebrow">ROTINA SEMANAL</p>
               <h3>Seus horários de escuta</h3>
             </div>
-            <span className="quiet-label">2026</span>
+            <span className="quiet-label">HISTÓRICO REAL</span>
           </div>
           <Heatmap compact data={data.heatmap} />
           <p className="card-footnote">
-            <CalendarDays size={14} /> Você escuta 2,4x mais aos sábados.
+            <CalendarDays size={14} /> Intensidade baseada nas sessões registradas.
           </p>
         </article>
         <article className="surface-card evolution-card">
           <div className="card-heading">
             <div>
-              <p className="eyebrow">SEU SOM MUDOU</p>
-              <h3>De janeiro para cá</h3>
+              <p className="eyebrow">SEU SOM ATUAL</p>
+              <h3>Gêneros mais presentes</h3>
             </div>
           </div>
-          <div className="evolution-list">
-            <EvolutionRow genre="Shoegaze" from={42} to={78} color="violet" />
-            <EvolutionRow genre="Jazz" from={12} to={39} color="orange" />
-            <EvolutionRow genre="Hyperpop" from={3} to={21} color="pink" />
-            <EvolutionRow genre="Indie Rock" from={82} to={65} color="blue" down />
-          </div>
+          {data.genreDna.length ? (
+            <div className="evolution-list">
+              {data.genreDna.slice(0, 4).map((genre) => (
+                <EvolutionRow key={genre.genre} genre={genre.genre} value={genre.value} />
+              ))}
+            </div>
+          ) : (
+            <EmptyHistory text="Os gêneros aparecem após a biblioteca ser sincronizada." />
+          )}
           <button
             className="outline-action"
-            onClick={() => onToast('Linha do tempo do DNA aberta.')}
+            onClick={() => onToast('Seu DNA é recalculado a cada sincronização.')}
           >
-            Explorar mudanças
+            Atualizar DNA
           </button>
         </article>
-      </section>
-
-      <section className="monthly-recap">
-        <div className="monthly-recap__orb">✦</div>
-        <div>
-          <p>SEU RESUMO DE AGOSTO ESTÁ CRESCENDO</p>
-          <h3>Mais 3 dias e você terá um novo capítulo para guardar.</h3>
-          <span>O recap chega automaticamente no primeiro dia do próximo mês.</span>
-        </div>
-        <button
-          onClick={() => onToast('Você receberá uma notificação quando o recap estiver pronto.')}
-        >
-          Me avise <Sparkles size={15} />
-        </button>
       </section>
     </div>
   );
 }
 
-function EvolutionRow({
-  genre,
-  from,
-  to,
+function HistoryStat({
+  icon,
   color,
-  down = false,
+  label,
+  value,
+  detail,
 }: {
-  genre: string;
-  from: number;
-  to: number;
+  icon: ReactNode;
   color: string;
-  down?: boolean;
+  label: string;
+  value: string;
+  detail: string;
 }) {
+  return (
+    <article className="surface-card">
+      <span className={`history-stat-icon ${color}`}>{icon}</span>
+      <div>
+        <p>{label}</p>
+        <b>{value}</b>
+        <span>
+          <ArrowUpRight size={13} /> {detail}
+        </span>
+      </div>
+    </article>
+  );
+}
+function EvolutionRow({ genre, value }: { genre: string; value: number }) {
   return (
     <div className="evolution-row">
       <span>{genre}</span>
       <div>
-        <i style={{ width: `${from}%` }} />
-        <b
-          className={`evolution-row__to evolution-row__to--${color}`}
-          style={{ width: `${to}%` }}
-        />
+        <b className="evolution-row__to evolution-row__to--blue" style={{ width: `${value}%` }} />
       </div>
-      <strong className={down ? 'is-down' : ''}>
-        {down ? '↓' : '↑'} {Math.abs(to - from)}%
-      </strong>
+      <strong>● {value}%</strong>
+    </div>
+  );
+}
+function EmptyHistory({ text }: { text: string }) {
+  return (
+    <div className="empty-card">
+      <Clock3 size={18} />
+      <span>{text}</span>
     </div>
   );
 }

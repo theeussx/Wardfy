@@ -40,32 +40,67 @@ export async function handleCommand(
   switch (interaction.commandName) {
     case 'perfil': {
       const target = interaction.options.getUser('usuario') ?? interaction.user;
+      const profile = await api.profile(target.id);
+      if (!profile?.spotifyConnected) {
+        await interaction.reply(
+          asEphemeral(
+            noticeCard(
+              'Spotify ainda não conectado',
+              `${target.globalName ?? target.username} precisa conectar a conta em ${dashboardLink()} antes de ter um perfil musical.`,
+            ),
+          ),
+        );
+        return;
+      }
       await interaction.reply(
         profileCard({
-          name: target.globalName ?? target.username,
-          title:
-            target.id === interaction.user.id ? 'Explorador Musical' : 'Curador de Frequências',
-          level: target.id === interaction.user.id ? 18 : 13,
-          xp: target.id === interaction.user.id ? 3240 : 1960,
-          nextLevelXp: target.id === interaction.user.id ? 4000 : 2800,
-          minutes: target.id === interaction.user.id ? 1284 : 972,
-          artists: target.id === interaction.user.id ? 102 : 76,
-          streak: target.id === interaction.user.id ? 12 : 7,
-          avatarUrl: target.displayAvatarURL({ size: 256 }),
+          name: profile.name,
+          title: profile.title,
+          level: profile.level,
+          xp: profile.xp,
+          nextLevelXp: profile.nextLevelXp,
+          minutes: profile.minutes,
+          artists: profile.artists,
+          streak: profile.streak,
+          avatarUrl: profile.avatarUrl ?? target.displayAvatarURL({ size: 256 }),
         }),
       );
       return;
     }
     case 'ranking': {
+      if (!interaction.guildId) return replyGuildOnly(interaction);
       const metric = (interaction.options.getString('metrica') ??
         'listeningMinutes') as RankingMetric;
       await interaction.deferReply();
-      const entries = await api.leaderboard(metric);
+      const entries = await api.leaderboard(interaction.guildId, metric);
+      if (entries.length === 0) {
+        await interaction.editReply(
+          noticeCard(
+            'Ainda não há escutas neste servidor',
+            'Quando membros conectados ouvirem música, o ranking aparecerá aqui automaticamente.',
+          ),
+        );
+        return;
+      }
       await interaction.editReply(rankingCard(metricLabels[metric] ?? 'Minutos ouvidos', entries));
       return;
     }
     case 'compatibilidade': {
       const target = interaction.options.getUser('usuario', true);
+      if (interaction.guildId) {
+        const settings = await api.guildSettings(interaction.guildId);
+        if (!settings.allowMemberComparison) {
+          await interaction.reply(
+            asEphemeral(
+              noticeCard(
+                'Comparação desativada',
+                'Um administrador desativou a comparação musical neste servidor.',
+              ),
+            ),
+          );
+          return;
+        }
+      }
       await interaction.deferReply();
       const report = await api.compatibility(interaction.user.id, target.id);
       await interaction.editReply(
@@ -73,16 +108,21 @@ export async function handleCommand(
           interaction.user.globalName ?? interaction.user.username,
           target.globalName ?? target.username,
           report,
+          target.id,
         ),
       );
       return;
     }
     case 'desafio': {
+      if (!interaction.guildId) return replyGuildOnly(interaction);
       await interaction.deferReply();
-      const [challenge] = await api.challenges();
+      const [challenge] = await api.challenges(interaction.guildId, interaction.user.id);
       if (!challenge) {
         await interaction.editReply(
-          noticeCard('Sem desafios por aqui', 'Volte em breve para uma nova missão.'),
+          noticeCard(
+            'Nenhum desafio ativo',
+            'Um administrador pode criar a próxima missão pelo painel Wardfy.',
+          ),
         );
         return;
       }
@@ -90,70 +130,56 @@ export async function handleCommand(
       return;
     }
     case 'agora': {
-      const name = interaction.user.globalName ?? interaction.user.username;
-      const snapshot = {
-        guildId: interaction.guildId ?? 'direct-message',
-        displayName: name,
-        userId: interaction.user.id,
-        isPlaying: true,
-        progressMs: 109_000,
-        deviceName: 'Spotify · dispositivo conectado',
-        deviceType: 'Computer',
-        updatedAt: new Date().toISOString(),
-        track: {
-          id: 'spotify:track:demo-deftones',
-          title: 'Be Quiet and Drive (Far Away)',
-          artists: ['Deftones'],
-          album: 'Around the Fur',
-          durationMs: 301_000,
-          spotifyUrl: 'https://open.spotify.com/',
-        },
-      };
-      await api.publishPlayback(snapshot);
+      await interaction.deferReply();
+      const playback = await api.syncPlayback(interaction.user.id);
+      if (!playback.isPlaying || !playback.track) {
+        await interaction.editReply(
+          noticeCard(
+            'Nada tocando agora',
+            `Abra o Spotify em um dispositivo ativo e confirme a conexão em ${dashboardLink()}.`,
+          ),
+        );
+        return;
+      }
+
       if (interaction.guild) {
         const settings = await api.guildSettings(interaction.guild.id);
         if (settings.activityChannelId) {
           await publisher.renderPlaying({
             guild: interaction.guild,
             channelId: settings.activityChannelId,
-            userId: interaction.user.id,
-            name,
-            track: snapshot.track.title,
-            artist: snapshot.track.artists.join(', '),
-            album: snapshot.track.album,
-            progressMs: snapshot.progressMs,
-            durationMs: snapshot.track.durationMs,
-            device: snapshot.deviceName,
-            spotifyUrl: snapshot.track.spotifyUrl,
+            discordId: interaction.user.id,
+            name: interaction.user.globalName ?? interaction.user.username,
+            track: playback.track.title,
+            artist: playback.track.artists.join(', '),
+            album: playback.track.album,
+            progressMs: playback.progressMs,
+            durationMs: playback.track.durationMs,
+            device: playback.deviceName,
+            spotifyUrl: playback.track.spotifyUrl,
+            albumArtUrl: playback.track.albumArtUrl,
+            spotifyTrackId: playback.track.id,
           });
         }
       }
-      await interaction.reply(
+
+      await interaction.editReply(
         nowPlayingCard({
-          name,
-          track: snapshot.track.title,
-          artist: snapshot.track.artists.join(', '),
-          album: snapshot.track.album,
-          progressMs: snapshot.progressMs,
-          durationMs: snapshot.track.durationMs,
-          device: snapshot.deviceName,
-          spotifyUrl: snapshot.track.spotifyUrl,
+          name: interaction.user.globalName ?? interaction.user.username,
+          track: playback.track.title,
+          artist: playback.track.artists.join(', '),
+          album: playback.track.album,
+          progressMs: playback.progressMs,
+          durationMs: playback.track.durationMs,
+          device: playback.deviceName,
+          spotifyUrl: playback.track.spotifyUrl,
+          albumArtUrl: playback.track.albumArtUrl,
         }),
       );
       return;
     }
     case 'configurar': {
-      if (!interaction.guildId) {
-        await interaction.reply(
-          asEphemeral(
-            noticeCard(
-              'Ação disponível em servidores',
-              'Abra este comando em um servidor do Discord.',
-            ),
-          ),
-        );
-        return;
-      }
+      if (!interaction.guildId) return replyGuildOnly(interaction);
       const channel = interaction.options.getChannel('canal_atividade');
       const interval = interaction.options.getInteger('intervalo');
       await api.updateGuildSettings(interaction.guildId, {
@@ -164,9 +190,9 @@ export async function handleCommand(
       await interaction.reply(
         asEphemeral(
           noticeCard(
-            'Configuração atualizada',
-            `As atividades serão publicadas em ${channelText}${interval ? ` a cada ${interval}s` : ''}.`,
-            0x5865f2,
+            'Configuração salva',
+            `Atividade musical: ${channelText}${interval ? ` · atualização a cada ${interval}s` : ''}.`,
+            0x1d4ed8,
           ),
         ),
       );
@@ -184,17 +210,18 @@ export async function handleButton(interaction: ButtonInteraction, api: WardfyAp
   if (namespace !== 'wardfy') return;
 
   if (feature === 'ranking') {
+    if (!interaction.guildId) return replyGuildOnly(interaction);
     const metric = (action === 'minutes' ? 'listeningMinutes' : action) as RankingMetric;
     if (!metricLabels[metric]) return;
     await interaction.deferUpdate();
-    const entries = await api.leaderboard(metric);
+    const entries = await api.leaderboard(interaction.guildId, metric);
     await interaction.editReply(rankingCard(metricLabels[metric], entries));
     return;
   }
 
-  if (feature === 'recommend' && action === 'open') {
+  if (feature === 'recommend' && action === 'open' && id) {
     const modal = new ModalBuilder()
-      .setCustomId('wardfy:recommend:submit')
+      .setCustomId(`wardfy:recommend:submit:${id}`)
       .setTitle('Indicar uma música');
     const trackInput = new TextInputBuilder()
       .setCustomId('track')
@@ -209,7 +236,6 @@ export async function handleButton(interaction: ButtonInteraction, api: WardfyAp
       .setRequired(false)
       .setMaxLength(600);
 
-    // LabelBuilder and TextDisplayBuilder are Components V2 modal primitives.
     modal
       .addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
@@ -230,13 +256,14 @@ export async function handleButton(interaction: ButtonInteraction, api: WardfyAp
     return;
   }
 
-  if (feature === 'challenge' && action === 'join') {
+  if (feature === 'challenge' && action === 'join' && id) {
+    await api.joinChallenge(interaction.user.id, id);
     await interaction.reply(
       asEphemeral(
         noticeCard(
           'Você entrou no desafio!',
-          `Seu progresso será contado automaticamente. Boa sorte! ${id ? '✦' : ''}`,
-          0xf4b942,
+          'Seu progresso será calculado automaticamente a partir das suas escutas conectadas.',
+          0x0ea5e9,
         ),
       ),
     );
@@ -247,8 +274,8 @@ export async function handleButton(interaction: ButtonInteraction, api: WardfyAp
     await interaction.reply(
       asEphemeral(
         noticeCard(
-          'Desafio pronto para compartilhar',
-          'Convide os amigos e disputem o topo juntos.',
+          'Compartilhe o desafio',
+          'Use o card acima para convidar membros do servidor para a mesma missão.',
         ),
       ),
     );
@@ -259,8 +286,8 @@ export async function handleButton(interaction: ButtonInteraction, api: WardfyAp
     await interaction.reply(
       asEphemeral(
         noticeCard(
-          'Seu DNA musical',
-          'Alternative 96% · Rock 82% · Shoegaze 78% · Indie 65%\nSeu som tende ao intenso, atmosférico e explorador.',
+          'DNA musical',
+          `Abra ${dashboardLink()} para ver seu DNA calculado a partir das escutas reais.`,
         ),
       ),
     );
@@ -268,22 +295,57 @@ export async function handleButton(interaction: ButtonInteraction, api: WardfyAp
   }
 
   await interaction.reply(
-    asEphemeral(noticeCard('Em breve', 'Essa área está sendo preparada para o seu servidor.')),
+    asEphemeral(
+      noticeCard('Ação indisponível', 'Essa ação ainda não está disponível neste contexto.'),
+    ),
   );
+
+  void id;
 }
 
 export async function handleRecommendationModal(
   interaction: import('discord.js').ModalSubmitInteraction,
+  api: WardfyApi,
 ): Promise<void> {
-  if (interaction.customId !== 'wardfy:recommend:submit') return;
-  const track = interaction.fields.getTextInputValue('track');
-  const note = interaction.fields.getTextInputValue('note');
+  const [, feature, action, targetDiscordId] = interaction.customId.split(':');
+  if (feature !== 'recommend' || action !== 'submit' || !targetDiscordId) return;
+  const track = interaction.fields.getTextInputValue('track').trim();
+  const note = interaction.fields.getTextInputValue('note').trim();
+  if (!/^https:\/\/(open\.)?spotify\.com\//i.test(track)) {
+    await interaction.reply(
+      asEphemeral(
+        noticeCard(
+          'Use um link do Spotify',
+          'Cole o link completo da faixa, álbum ou playlist que deseja recomendar.',
+        ),
+      ),
+    );
+    return;
+  }
+  await api.recommend(interaction.user.id, targetDiscordId, {
+    trackLabel: track,
+    spotifyTrackUrl: track,
+    ...(note ? { note } : {}),
+  });
+  const target = await interaction.client.users.fetch(targetDiscordId).catch(() => null);
+  const delivered = await target
+    ?.send(
+      noticeCard(
+        'Nova indicação musical',
+        `${interaction.user.globalName ?? interaction.user.username} recomendou ${track}${note ? ` — ${note}` : ''}`,
+        0x0ea5e9,
+      ),
+    )
+    .then(() => true)
+    .catch(() => false);
   await interaction.reply(
     asEphemeral(
       noticeCard(
-        'Indicação enviada ✦',
-        `**${track}** foi adicionada à conversa musical${note ? ` — “${note}”` : ''}.`,
-        0x1ed760,
+        'Indicação enviada',
+        delivered
+          ? 'A recomendação foi salva e enviada por mensagem direta.'
+          : 'A recomendação foi salva. A outra pessoa poderá vê-la no Wardfy.',
+        0x0ea5e9,
       ),
     ),
   );
@@ -294,12 +356,29 @@ export async function respondWithError(
   error: unknown,
 ): Promise<void> {
   const message = error instanceof Error ? error.message : 'Não foi possível concluir esta ação.';
-  const payload = asEphemeral(noticeCard('Algo saiu do ritmo', message, 0xe05d5d));
+  const payload = asEphemeral(noticeCard('Algo saiu do ritmo', message, 0x1e3a8a));
   if (interaction.deferred || interaction.replied) {
     await interaction.editReply(payload);
   } else {
     await interaction.reply(payload);
   }
+}
+
+async function replyGuildOnly(
+  interaction: ChatInputCommandInteraction | ButtonInteraction,
+): Promise<void> {
+  const payload = asEphemeral(
+    noticeCard(
+      'Use este comando em um servidor',
+      'Abra este comando em um servidor do Discord onde Wardfy está instalado.',
+    ),
+  );
+  if (interaction.deferred || interaction.replied) await interaction.editReply(payload);
+  else await interaction.reply(payload);
+}
+
+function dashboardLink(): string {
+  return process.env.APP_ORIGIN ?? 'o painel Wardfy';
 }
 
 function asEphemeral(card: ComponentsV2Reply): ComponentsV2Reply {

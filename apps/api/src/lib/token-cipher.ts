@@ -1,22 +1,13 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 /**
- * Encrypts Spotify refresh/access tokens at rest. The payload is versioned so a
- * key-rotation job can safely re-encrypt rows with a newer key later.
+ * Encrypts Spotify OAuth tokens at rest. Payloads are versioned so a future
+ * rotation job can re-encrypt accounts without invalidating every connection.
  */
 export class TokenCipher {
   private readonly key: Buffer;
 
-  constructor(base64Key?: string) {
-    if (!base64Key) {
-      if (process.env.NODE_ENV === 'production') {
-        throw new Error('TOKEN_ENCRYPTION_KEY is required outside development.');
-      }
-      // Deliberately ephemeral in development: restarting invalidates demo tokens.
-      this.key = randomBytes(32);
-      return;
-    }
-
+  constructor(base64Key: string) {
     const key = Buffer.from(base64Key, 'base64');
     if (key.length !== 32) {
       throw new Error('TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key.');

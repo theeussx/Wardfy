@@ -5,14 +5,16 @@ interface AlbumArtworkProps {
   size?: 'tiny' | 'small' | 'medium' | 'large';
   className?: string;
   label?: string;
+  src?: string;
 }
 
-/** Decorative local cover art for demo mode. Production cards use Spotify image URLs. */
+/** Renders Spotify album imagery when available, with a neutral Wardfy fallback. */
 export function AlbumArtwork({
   variant = 'deftones',
   size = 'medium',
   className = '',
   label = 'Capa do álbum',
+  src,
 }: AlbumArtworkProps) {
   return (
     <div
@@ -20,27 +22,12 @@ export function AlbumArtwork({
       className={`album-art album-art--${variant} album-art--${size} ${className}`}
       role="img"
     >
-      <span className="album-art__grain" />
-      {variant === 'deftones' && (
-        <span className="album-art__wordmark">
-          AROUND
-          <br />
-          THE FUR
-        </span>
+      {src ? (
+        <img className="album-art__image" src={src} alt="" loading="lazy" />
+      ) : (
+        <span className="album-art__fallback">♫</span>
       )}
-      {variant === 'mbv' && (
-        <span className="album-art__wordmark album-art__wordmark--blur">loveless</span>
-      )}
-      {variant === 'cigarettes' && (
-        <span className="album-art__wordmark">
-          CIGARETTES
-          <br />
-          AFTER SEX
-        </span>
-      )}
-      {variant === 'slowdive' && <span className="album-art__wordmark">SLOWDIVE</span>}
-      {variant === 'muse' && <span className="album-art__wordmark">MUSE</span>}
-      {variant === 'frank' && <span className="album-art__wordmark">blonde</span>}
+      {!src && <span className="album-art__grain" />}
     </div>
   );
 }

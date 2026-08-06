@@ -2,6 +2,15 @@ import { config as loadDotenv } from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
+
+/**
+ * npm workspace scripts run with apps/bot as the current directory, while the
+ * project keeps its .env at the repository root. Resolve relative to this
+ * module so `npm run dev:bot`, `npm run bot:register`, Docker and compiled
+ * production code all find the same file reliably.
+ *
+ * Values explicitly supplied by the runtime always win over .env values.
+ */
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
 loadDotenv({ path: resolve(moduleDirectory, '../../../.env') });
 loadDotenv({ path: resolve(process.cwd(), '.env') });
@@ -10,8 +19,9 @@ const schema = z.object({
   DISCORD_BOT_TOKEN: z.string().min(20).optional(),
   DISCORD_APPLICATION_ID: z.string().min(1).optional(),
   DISCORD_DEV_GUILD_ID: z.string().min(1).optional(),
-  API_ORIGIN: z.string().url().default('http://localhost:3001'),
-  BOT_API_TOKEN: z.string().min(16).optional(),
+  API_ORIGIN: z.string().url(),
+  BOT_API_TOKEN: z.string().min(32).optional(),
+  ACTIVITY_SYNC_INTERVAL_SECONDS: z.coerce.number().int().min(15).max(300).default(30),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 });
 
@@ -32,10 +42,12 @@ export function loadBotConfig(env: NodeJS.ProcessEnv = process.env): BotConfig {
 export function assertBotCredentials(config: BotConfig): asserts config is BotConfig & {
   DISCORD_BOT_TOKEN: string;
   DISCORD_APPLICATION_ID: string;
+  BOT_API_TOKEN: string;
 } {
   const missing = [
     !config.DISCORD_BOT_TOKEN && 'DISCORD_BOT_TOKEN',
     !config.DISCORD_APPLICATION_ID && 'DISCORD_APPLICATION_ID',
+    !config.BOT_API_TOKEN && 'BOT_API_TOKEN',
   ].filter(Boolean);
 
   if (missing.length > 0) {

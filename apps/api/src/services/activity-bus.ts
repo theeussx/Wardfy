@@ -7,7 +7,7 @@ export interface ActivityUpdate extends PlaybackSnapshot {
   displayName?: string;
 }
 
-/** Process-local fan-out in demo. Replace with Redis pub/sub in a multi-instance deployment. */
+/** Process-local fan-out. Deployments with multiple API instances can replace this with Redis Pub/Sub. */
 export class ActivityBus {
   private readonly emitter = new EventEmitter();
 

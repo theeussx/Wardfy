@@ -9,17 +9,23 @@ export interface DiscordProfile {
   locale?: string;
 }
 
+export interface DiscordOAuthGuild {
+  id: string;
+  name: string;
+  icon: string | null;
+  owner: boolean;
+  permissions: string;
+}
+
+export interface DiscordOAuthResult {
+  profile: DiscordProfile;
+  guilds: DiscordOAuthGuild[];
+}
+
 export class DiscordOAuthService {
   constructor(private readonly config: AppConfig) {}
 
   buildAuthorizeUrl(state: string): string {
-    if (!this.config.DISCORD_CLIENT_ID) {
-      throw new AppError(
-        'Discord OAuth is not configured on this environment.',
-        503,
-        'DISCORD_NOT_CONFIGURED',
-      );
-    }
     const params = new URLSearchParams({
       client_id: this.config.DISCORD_CLIENT_ID,
       redirect_uri: this.config.DISCORD_REDIRECT_URI,
@@ -31,14 +37,7 @@ export class DiscordOAuthService {
     return `https://discord.com/oauth2/authorize?${params.toString()}`;
   }
 
-  async exchangeCode(code: string): Promise<DiscordProfile> {
-    if (!this.config.DISCORD_CLIENT_ID || !this.config.DISCORD_CLIENT_SECRET) {
-      throw new AppError(
-        'Discord OAuth is not configured on this environment.',
-        503,
-        'DISCORD_NOT_CONFIGURED',
-      );
-    }
+  async exchangeCode(code: string): Promise<DiscordOAuthResult> {
     const body = new URLSearchParams({
       client_id: this.config.DISCORD_CLIENT_ID,
       client_secret: this.config.DISCORD_CLIENT_SECRET,
@@ -55,12 +54,17 @@ export class DiscordOAuthService {
       throw new AppError('Discord token exchange failed.', 502, 'DISCORD_TOKEN_EXCHANGE_FAILED');
     }
     const token = (await tokenResponse.json()) as { access_token: string };
-    const profileResponse = await fetch('https://discord.com/api/v10/users/@me', {
-      headers: { Authorization: `Bearer ${token.access_token}` },
-    });
-    if (!profileResponse.ok) {
+    const headers = { Authorization: `Bearer ${token.access_token}` };
+    const [profileResponse, guildsResponse] = await Promise.all([
+      fetch('https://discord.com/api/v10/users/@me', { headers }),
+      fetch('https://discord.com/api/v10/users/@me/guilds', { headers }),
+    ]);
+    if (!profileResponse.ok || !guildsResponse.ok) {
       throw new AppError('Discord profile lookup failed.', 502, 'DISCORD_PROFILE_LOOKUP_FAILED');
     }
-    return (await profileResponse.json()) as DiscordProfile;
+    return {
+      profile: (await profileResponse.json()) as DiscordProfile,
+      guilds: (await guildsResponse.json()) as DiscordOAuthGuild[],
+    };
   }
 }

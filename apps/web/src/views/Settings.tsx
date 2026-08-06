@@ -2,7 +2,6 @@ import {
   Bell,
   Bot,
   Check,
-  ChevronDown,
   Clock3,
   Crown,
   Hash,
@@ -11,9 +10,18 @@ import {
   SlidersHorizontal,
   UserRoundCheck,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
+import { wardfyApi } from '../lib/api';
 import type { DashboardData } from '../types';
+
+interface SettingsState {
+  activityChannelId: string;
+  activityUpdateSeconds: number;
+  notificationsEnabled: boolean;
+  automaticRolesEnabled: boolean;
+  allowMemberComparison: boolean;
+}
 
 export function SettingsView({
   data,
@@ -24,39 +32,57 @@ export function SettingsView({
   onSave: (settings: Record<string, unknown>) => Promise<void>;
   onToast: (text: string) => void;
 }) {
-  const [activityChannel, setActivityChannel] = useState('🎧-tocando-agora');
-  const [interval, setIntervalValue] = useState('30 segundos');
-  const [notifications, setNotifications] = useState(true);
-  const [comparison, setComparison] = useState(true);
-  const [roles, setRoles] = useState(false);
+  const [settings, setSettings] = useState<SettingsState>({
+    activityChannelId: '',
+    activityUpdateSeconds: 30,
+    notificationsEnabled: true,
+    automaticRolesEnabled: false,
+    allowMemberComparison: true,
+  });
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void wardfyApi
+      .settings(data.server.id!)
+      .then((remote) =>
+        setSettings({
+          activityChannelId: String(remote.activityChannelId ?? ''),
+          activityUpdateSeconds: Number(remote.activityUpdateSeconds ?? 30),
+          notificationsEnabled: Boolean(remote.notificationsEnabled),
+          automaticRolesEnabled: Boolean(remote.automaticRolesEnabled),
+          allowMemberComparison: Boolean(remote.allowMemberComparison),
+        }),
+      )
+      .catch(() => onToast('Não foi possível carregar as configurações do servidor.'))
+      .finally(() => setLoading(false));
+  }, [data.server.id, onToast]);
 
   const save = async () => {
     setSaving(true);
-    await onSave({
-      activityChannelId: activityChannel,
-      activityUpdateSeconds: Number(interval.split(' ')[0]),
-      notificationsEnabled: notifications,
-      automaticRolesEnabled: roles,
-      allowMemberComparison: comparison,
-    });
-    setSaving(false);
-    onToast('Preferências salvas para o Wardfy Lab.');
+    try {
+      await onSave({ ...settings, activityChannelId: settings.activityChannelId || null });
+      onToast('Preferências salvas para este servidor.');
+    } catch {
+      onToast('Não foi possível salvar as preferências.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <div className="page-stack settings-view">
       <section className="settings-intro">
         <div>
-          <p className="eyebrow">WARDYFY LAB · 248 MEMBROS</p>
+          <p className="eyebrow">{data.server.name.toUpperCase()}</p>
           <h2>
             O ritmo do servidor,
             <br />
             <em>sob seu controle.</em>
           </h2>
-          <p>Configure como a comunidade descobre, compete e compartilha música.</p>
+          <p>As alterações são persistidas no servidor e usadas diretamente pelo bot Wardfy.</p>
         </div>
-        <button className="primary-action" disabled={saving} onClick={save}>
+        <button className="primary-action" disabled={saving || loading} onClick={save}>
           {saving ? (
             'Salvando…'
           ) : (
@@ -66,128 +92,137 @@ export function SettingsView({
           )}
         </button>
       </section>
-
       <section className="settings-layout">
         <div className="settings-nav surface-card">
           <button className="is-active">
             <SlidersHorizontal size={16} /> Geral
           </button>
-          <button onClick={() => onToast('Canais selecionado.')}>
+          <button>
             <Hash size={16} /> Canais e atividade
           </button>
-          <button onClick={() => onToast('Notificações selecionado.')}>
+          <button>
             <Bell size={16} /> Notificações
           </button>
-          <button onClick={() => onToast('Cargos selecionado.')}>
+          <button>
             <Crown size={16} /> Cargos e XP
           </button>
-          <button onClick={() => onToast('Permissões selecionado.')}>
+          <button>
             <ShieldCheck size={16} /> Permissões
           </button>
         </div>
         <div className="settings-panels">
           <article className="surface-card settings-panel">
             <div className="settings-panel__title">
-              <span className="settings-panel__icon violet">
+              <span className="settings-panel__icon blue">
                 <Bot size={19} />
               </span>
               <div>
                 <h3>Canal de atividade</h3>
-                <p>Onde o Wardfy mostra quem está ouvindo agora.</p>
+                <p>Informe o ID do canal onde Wardfy deve atualizar os cards de presença.</p>
               </div>
             </div>
             <div className="field-grid">
               <label>
-                CANAL
-                <select
-                  value={activityChannel}
-                  onChange={(event) => setActivityChannel(event.target.value)}
-                >
-                  <option>🎧-tocando-agora</option>
-                  <option>💬-music-chat</option>
-                  <option>🔊-geral</option>
-                </select>
-                <ChevronDown size={15} />
+                ID DO CANAL
+                <input
+                  value={settings.activityChannelId}
+                  onChange={(event) =>
+                    setSettings((current) => ({
+                      ...current,
+                      activityChannelId: event.target.value,
+                    }))
+                  }
+                  placeholder="Ex.: 123456789012345678"
+                />
               </label>
               <label>
                 ATUALIZAR A CADA
-                <select value={interval} onChange={(event) => setIntervalValue(event.target.value)}>
-                  <option>15 segundos</option>
-                  <option>30 segundos</option>
-                  <option>60 segundos</option>
-                  <option>120 segundos</option>
+                <select
+                  value={settings.activityUpdateSeconds}
+                  onChange={(event) =>
+                    setSettings((current) => ({
+                      ...current,
+                      activityUpdateSeconds: Number(event.target.value),
+                    }))
+                  }
+                >
+                  <option value={15}>15 segundos</option>
+                  <option value={30}>30 segundos</option>
+                  <option value={60}>60 segundos</option>
+                  <option value={120}>120 segundos</option>
                 </select>
-                <ChevronDown size={15} />
               </label>
             </div>
             <div className="settings-note">
               <Clock3 size={15} />
               <span>
-                Atualizamos a mesma mensagem em vez de criar novas, para manter o canal limpo.
+                O bot edita a mesma mensagem de cada ouvinte e restaura essas referências após
+                reiniciar.
               </span>
             </div>
           </article>
-
           <article className="surface-card settings-panel">
             <div className="settings-panel__title">
-              <span className="settings-panel__icon lime">
+              <span className="settings-panel__icon cyan">
                 <Bell size={19} />
               </span>
               <div>
                 <h3>Experiência social</h3>
-                <p>Escolha como os membros interagem com a atividade musical.</p>
+                <p>Defina como os membros interagem com a atividade musical.</p>
               </div>
             </div>
             <div className="toggle-list">
               <Toggle
                 title="Notificar novas conquistas"
-                detail="Publica um cartão discreto quando alguém desbloqueia uma conquista."
-                value={notifications}
-                onChange={setNotifications}
+                detail="Publica conquistas desbloqueadas no canal configurado."
+                value={settings.notificationsEnabled}
+                onChange={(value) =>
+                  setSettings((current) => ({ ...current, notificationsEnabled: value }))
+                }
               />
               <Toggle
                 title="Permitir comparação musical"
                 detail="Membros podem usar /compatibilidade entre si."
-                value={comparison}
-                onChange={setComparison}
+                value={settings.allowMemberComparison}
+                onChange={(value) =>
+                  setSettings((current) => ({ ...current, allowMemberComparison: value }))
+                }
               />
               <Toggle
                 title="Cargos automáticos"
-                detail="Distribui cargos por nível e títulos musicais desbloqueados."
-                value={roles}
-                onChange={setRoles}
+                detail="Reservado para regras de nível e títulos configuradas pelo administrador."
+                value={settings.automaticRolesEnabled}
+                onChange={(value) =>
+                  setSettings((current) => ({ ...current, automaticRolesEnabled: value }))
+                }
               />
             </div>
           </article>
-
           <article className="surface-card settings-panel">
             <div className="settings-panel__title">
-              <span className="settings-panel__icon orange">
+              <span className="settings-panel__icon sky">
                 <LockKeyhole size={19} />
               </span>
               <div>
                 <h3>Privacidade e permissões</h3>
-                <p>Wardfy só lê a atividade que cada membro escolhe conectar.</p>
+                <p>
+                  Tokens OAuth são criptografados e permissões do painel seguem seu cargo no
+                  Discord.
+                </p>
               </div>
             </div>
             <div className="privacy-grid">
               <div>
                 <UserRoundCheck size={18} />
                 <b>Dados individuais</b>
-                <span>Visíveis apenas para membros conectados e conforme o perfil escolhido.</span>
+                <span>Exibidos apenas após a conta Spotify ser conectada voluntariamente.</span>
               </div>
               <div>
                 <ShieldCheck size={18} />
                 <b>Tokens protegidos</b>
-                <span>Criptografados em repouso e renovados automaticamente.</span>
+                <span>Armazenados com AES-256-GCM e renovados automaticamente.</span>
               </div>
             </div>
-            <button
-              className="outline-action"
-              onClick={() => onToast('Registro de auditoria aberto.')}
-            >
-              Ver registro de auditoria
-            </button>
           </article>
         </div>
       </section>

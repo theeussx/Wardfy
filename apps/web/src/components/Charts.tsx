@@ -22,8 +22,8 @@ export function ListeningChart({ data }: { data: Array<{ day: string; minutes: n
         <AreaChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
           <defs>
             <linearGradient id="listening-gradient" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#a681ff" stopOpacity={0.45} />
-              <stop offset="100%" stopColor="#a681ff" stopOpacity={0} />
+              <stop offset="0%" stopColor="#55b8ff" stopOpacity={0.45} />
+              <stop offset="100%" stopColor="#55b8ff" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid
@@ -47,7 +47,7 @@ export function ListeningChart({ data }: { data: Array<{ day: string; minutes: n
             width={30}
           />
           <Tooltip
-            cursor={{ stroke: '#a681ff', strokeWidth: 1, strokeOpacity: 0.45 }}
+            cursor={{ stroke: '#55b8ff', strokeWidth: 1, strokeOpacity: 0.45 }}
             contentStyle={{
               background: '#1a1a22',
               border: '1px solid rgba(255,255,255,.09)',
@@ -58,7 +58,7 @@ export function ListeningChart({ data }: { data: Array<{ day: string; minutes: n
           />
           <Area
             dataKey="minutes"
-            stroke="#b190ff"
+            stroke="#59b9ff"
             strokeWidth={2.2}
             fill="url(#listening-gradient)"
             type="monotone"
@@ -84,9 +84,9 @@ export function DnaRadar({
           <PolarAngleAxis dataKey="genre" tick={{ fill: '#a9a9b5', fontSize: compact ? 9 : 11 }} />
           <Radar
             dataKey="value"
-            fill="#9c74ff"
+            fill="#2185d5"
             fillOpacity={0.38}
-            stroke="#c6adff"
+            stroke="#9bdcff"
             strokeWidth={2}
           />
         </RadarChart>
@@ -110,8 +110,8 @@ export function TimelineChart({
         >
           <defs>
             <linearGradient id="bar-gradient" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#c5ff48" />
-              <stop offset="100%" stopColor="#83c432" />
+              <stop offset="0%" stopColor="#38bdf8" />
+              <stop offset="100%" stopColor="#197bbd" />
             </linearGradient>
           </defs>
           <CartesianGrid
@@ -147,7 +147,7 @@ export function TimelineChart({
           <Bar dataKey="minutes" fill="url(#bar-gradient)" radius={[6, 6, 1, 1]} maxBarSize={32}>
             {data.map((entry) => (
               <Cell
-                fill={entry.month === 'Ago' ? '#c5ff48' : '#8763dc'}
+                fill={entry.month === 'Ago' ? '#38bdf8' : '#1d71c9'}
                 key={`cell-${entry.month}`}
               />
             ))}

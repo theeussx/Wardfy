@@ -10,7 +10,6 @@ import {
   Pause,
   Play,
   Sparkles,
-  Trophy,
   UsersRound,
 } from 'lucide-react';
 
@@ -18,11 +17,11 @@ import { AlbumArtwork, ColorAvatar } from '../components/AlbumArtwork';
 import { ListeningChart } from '../components/Charts';
 import { Heatmap } from '../components/Heatmap';
 import { ProgressBar, formatClock } from '../components/ProgressBar';
-import { demoLeaderboard, topTracks } from '../data/demo';
-import type { DashboardData, ViewKey } from '../types';
+import type { DashboardData, LeaderboardEntry, ViewKey } from '../types';
 
 interface OverviewProps {
   data: DashboardData;
+  rankings: LeaderboardEntry[];
   progressMs: number;
   paused: boolean;
   onTogglePlayback: () => void;
@@ -30,15 +29,11 @@ interface OverviewProps {
   onToast: (text: string) => void;
 }
 
-const iconMap = {
-  clock: Clock3,
-  sparkles: Sparkles,
-  music: Music2,
-  flame: Flame,
-};
+const iconMap = { clock: Clock3, sparkles: Sparkles, music: Music2, flame: Flame };
 
 export function Overview({
   data,
+  rankings,
   progressMs,
   paused,
   onTogglePlayback,
@@ -47,7 +42,7 @@ export function Overview({
 }: OverviewProps) {
   const track = data.nowPlaying.track;
   const progress = track ? (progressMs / track.durationMs) * 100 : 0;
-  const rankings = demoLeaderboard();
+  const remainingXp = Math.max(0, data.viewer.nextLevelXp - data.viewer.xp);
 
   return (
     <div className="overview page-stack">
@@ -66,23 +61,32 @@ export function Overview({
                 <i />
                 <i />
               </span>{' '}
-              TOCANDO AGORA
+              {data.nowPlaying.isPlaying ? 'TOCANDO AGORA' : 'SEM REPRODUÇÃO ATIVA'}
             </div>
             <button
               className="more-button"
               aria-label="Mais opções"
-              onClick={() => onToast('Opções de reprodução disponíveis no Spotify.')}
+              onClick={() => onToast('A reprodução é controlada diretamente pelo Spotify.')}
             >
               •••
             </button>
           </div>
           <div className="now-playing-card__body">
-            <AlbumArtwork className="now-playing-card__cover" size="large" />
+            <AlbumArtwork
+              src={track?.albumArtUrl}
+              className="now-playing-card__cover"
+              size="large"
+              label={track?.album ?? 'Sem capa'}
+            />
             <div className="now-playing-card__info">
               <p className="eyebrow">SUA SESSÃO</p>
-              <h2>{track?.title ?? 'Nenhuma faixa tocando'}</h2>
-              <p className="track-artist">{track?.artists.join(', ')}</p>
-              <p className="track-album">{track?.album}</p>
+              <h2>{track?.title ?? 'Abra o Spotify para começar'}</h2>
+              <p className="track-artist">
+                {track?.artists.join(', ') ?? 'Wardfy detectará a próxima faixa automaticamente'}
+              </p>
+              <p className="track-album">
+                {track?.album ?? 'A reprodução aparece aqui em até alguns segundos.'}
+              </p>
               <div className="player-progress">
                 <ProgressBar showGlow value={progress} />
                 <div>
@@ -91,12 +95,18 @@ export function Overview({
                 </div>
               </div>
               <div className="player-controls">
-                <button className="skip-button" aria-label="Faixa anterior">
+                <button
+                  className="skip-button"
+                  aria-label="Controlar no Spotify"
+                  onClick={() =>
+                    track && window.open(track.spotifyUrl, '_blank', 'noopener,noreferrer')
+                  }
+                >
                   ◁
                 </button>
                 <button
                   className="play-button"
-                  aria-label={paused ? 'Tocar' : 'Pausar'}
+                  aria-label={paused ? 'Retomar contador visual' : 'Pausar contador visual'}
                   onClick={onTogglePlayback}
                 >
                   {paused ? (
@@ -105,22 +115,37 @@ export function Overview({
                     <Pause fill="currentColor" size={18} />
                   )}
                 </button>
-                <button className="skip-button" aria-label="Próxima faixa">
+                <button
+                  className="skip-button"
+                  aria-label="Abrir no Spotify"
+                  onClick={() =>
+                    track && window.open(track.spotifyUrl, '_blank', 'noopener,noreferrer')
+                  }
+                >
                   ▷
                 </button>
                 <span className="device-pill">
-                  <Headphones size={13} /> {data.nowPlaying.deviceName}
+                  <Headphones size={13} /> {data.nowPlaying.deviceName ?? 'Aguardando dispositivo'}
                 </span>
               </div>
             </div>
           </div>
           <div className="now-playing-card__footer">
             <span>
-              <i className="status-dot" /> sincronizado agora
+              <i className={`status-dot ${data.nowPlaying.isPlaying ? '' : 'status-dot--idle'}`} />{' '}
+              {data.nowPlaying.isPlaying ? 'sincronizado com Spotify' : 'aguardando atividade'}
             </span>
-            <button onClick={() => onToast('Link copiado para a área de transferência.')}>
-              Compartilhar <ArrowRight size={14} />
-            </button>
+            {track && (
+              <button
+                onClick={() =>
+                  navigator.clipboard
+                    ?.writeText(track.spotifyUrl)
+                    .then(() => onToast('Link do Spotify copiado.'))
+                }
+              >
+                Compartilhar <ArrowRight size={14} />
+              </button>
+            )}
           </div>
         </motion.article>
 
@@ -130,16 +155,18 @@ export function Overview({
               <p className="eyebrow">SEU RITMO</p>
               <h3>Esta semana em ondas</h3>
             </div>
-            <span className="stat-chip stat-chip--purple">+18,4%</span>
+            <span className="stat-chip stat-chip--blue">DADOS REAIS</span>
           </div>
           <div className="weekly-card__stat">
-            <strong>1.284</strong>
+            <strong>{data.stats[0]?.value ?? '0'}</strong>
             <span>minutos em escuta</span>
           </div>
           <ListeningChart data={data.weeklyMinutes} />
           <div className="weekly-card__caption">
             <span>
-              Seu pico foi <b>sábado, 21h</b>
+              {data.weeklyMinutes.some((item) => item.minutes > 0)
+                ? 'Seu histórico é atualizado a cada reprodução.'
+                : 'Sua primeira sessão aparecerá neste gráfico.'}
             </span>
             <button onClick={() => onChangeView('historico')}>
               Detalhes <ChevronRight size={14} />
@@ -150,7 +177,7 @@ export function Overview({
 
       <section className="metric-grid">
         {data.stats.map((stat, index) => {
-          const Icon = iconMap[stat.icon as keyof typeof iconMap];
+          const Icon = iconMap[stat.icon];
           return (
             <motion.article
               className="metric-card surface-card"
@@ -189,10 +216,11 @@ export function Overview({
             <button onClick={() => onChangeView('ranking')}>Artistas</button>
             <button onClick={() => onChangeView('ranking')}>Descobertas</button>
           </div>
-          <ol className="ranking-list">
-            {rankings.slice(0, 5).map((entry) => {
-              const colors = ['#FF7A59', '#8B5CF6', '#5B8CFF', '#AF65E9', '#18B6A4'];
-              return (
+          {rankings.length === 0 ? (
+            <EmptyCard text="Conecte membros e escute música para formar o ranking." />
+          ) : (
+            <ol className="ranking-list">
+              {rankings.slice(0, 5).map((entry) => (
                 <li
                   className={entry.isCurrentUser ? 'ranking-list__current' : ''}
                   key={entry.userId}
@@ -201,7 +229,10 @@ export function Overview({
                     {entry.rank < 4 ? ['🥇', '🥈', '🥉'][entry.rank - 1] : entry.rank}
                   </span>
                   <ColorAvatar
-                    color={colors[entry.rank - 1] ?? '#777'}
+                    color={
+                      ['#2563eb', '#0ea5e9', '#38bdf8', '#1d4ed8', '#0284c7'][entry.rank - 1] ??
+                      '#2563eb'
+                    }
                     initials={entry.displayName.slice(0, 2).toUpperCase()}
                     size="small"
                   />
@@ -210,13 +241,13 @@ export function Overview({
                     {entry.isCurrentUser && <small>você</small>}
                   </span>
                   <span className="ranking-list__bar">
-                    <i style={{ width: `${(entry.value / rankings[0].value) * 100}%` }} />
+                    <i style={{ width: `${(entry.value / (rankings[0]?.value || 1)) * 100}%` }} />
                   </span>
                   <strong>{entry.value.toLocaleString('pt-BR')}</strong>
                 </li>
-              );
-            })}
-          </ol>
+              ))}
+            </ol>
+          )}
         </article>
 
         <article className="surface-card friends-card">
@@ -226,46 +257,40 @@ export function Overview({
               <h3>Amigos ouvindo agora</h3>
             </div>
             <span className="online-count">
-              <i /> 2 ao vivo
+              <i /> {data.friends.length} ao vivo
             </span>
           </div>
-          <div className="friend-list">
-            {data.friends.map((friend) => (
-              <button
-                className={`friend-row friend-row--${friend.status}`}
-                key={friend.id}
-                onClick={() =>
-                  friend.status === 'playing'
-                    ? onChangeView('atividade')
-                    : onToast(`${friend.name} ainda não está ouvindo.`)
-                }
-              >
-                <ColorAvatar
-                  color={friend.color}
-                  initials={friend.initials}
-                  online={friend.status === 'playing'}
-                  size="medium"
-                />
-                <span className="friend-row__details">
-                  <b>{friend.name}</b>
-                  <small>
-                    {friend.status === 'playing'
-                      ? `${friend.track} · ${friend.artist}`
-                      : (friend.track ?? 'Offline')}
-                  </small>
-                </span>
-                {friend.status === 'playing' ? (
+          {data.friends.length === 0 ? (
+            <EmptyCard text="Quando alguém do servidor ouvir Spotify, a presença aparece aqui." />
+          ) : (
+            <div className="friend-list">
+              {data.friends.map((friend) => (
+                <button
+                  className={`friend-row friend-row--${friend.status}`}
+                  key={friend.id}
+                  onClick={() => onChangeView('atividade')}
+                >
+                  <ColorAvatar
+                    color={friend.color}
+                    initials={friend.initials}
+                    online={friend.status === 'playing'}
+                    size="medium"
+                  />
+                  <span className="friend-row__details">
+                    <b>{friend.name}</b>
+                    <small>
+                      {friend.track} · {friend.artist}
+                    </small>
+                  </span>
                   <span className="friend-row__playing">
                     <i />
                     <i />
                     <i />
                   </span>
-                ) : (
-                  <span className="friend-row__time">{friend.status === 'idle' ? '18m' : ''}</span>
-                )}
-              </button>
-            ))}
-          </div>
+                </button>
+              ))}
+            </div>
+          )}
           <button className="outline-action" onClick={() => onChangeView('atividade')}>
             <UsersRound size={15} /> Abrir atividade ao vivo
           </button>
@@ -276,65 +301,76 @@ export function Overview({
         <article className="surface-card top-tracks-card">
           <div className="card-heading">
             <div>
-              <p className="eyebrow">SEU TOP 4</p>
-              <h3>Faixas que te encontraram</h3>
+              <p className="eyebrow">SUAS MAIS OUVIDAS</p>
+              <h3>Faixas deste período</h3>
             </div>
             <Disc3 size={19} className="muted-icon" />
           </div>
-          <div className="top-track-list">
-            {topTracks.map((item) => (
-              <button
-                className="top-track"
-                key={item.rank}
-                onClick={() => onToast(`Abrindo ${item.title} no Spotify…`)}
-              >
-                <span className="top-track__rank">0{item.rank}</span>
-                <AlbumArtwork
-                  variant={item.art as 'deftones' | 'mbv' | 'cigarettes' | 'slowdive'}
-                  size="small"
-                />
-                <span className="top-track__meta">
-                  <b>{item.title}</b>
-                  <small>{item.artist}</small>
-                </span>
-                <span className="top-track__plays">
-                  {item.plays} <small>plays</small>
-                </span>
-                <Play size={15} fill="currentColor" />
-              </button>
-            ))}
-          </div>
+          {data.topTracks.length === 0 ? (
+            <EmptyCard text="Suas faixas mais ouvidas aparecem depois da primeira sincronização." />
+          ) : (
+            <div className="top-track-list">
+              {data.topTracks.map((item) => (
+                <button
+                  className="top-track"
+                  key={item.id}
+                  onClick={() => window.open(item.spotifyUrl, '_blank', 'noopener,noreferrer')}
+                >
+                  <span className="top-track__rank">{String(item.rank).padStart(2, '0')}</span>
+                  <AlbumArtwork src={item.albumArtUrl} size="small" />
+                  <span className="top-track__meta">
+                    <b>{item.title}</b>
+                    <small>{item.artists.join(', ')}</small>
+                  </span>
+                  <span className="top-track__plays">
+                    {item.plays} <small>plays</small>
+                  </span>
+                  <Play size={15} fill="currentColor" />
+                </button>
+              ))}
+            </div>
+          )}
         </article>
-
         <article className="surface-card heatmap-card">
           <div className="card-heading">
             <div>
               <p className="eyebrow">MAPA DE ATIVIDADE</p>
               <h3>Quando a música acontece</h3>
             </div>
-            <span className="quiet-label">UTC−3</span>
+            <span className="quiet-label">SEU HISTÓRICO</span>
           </div>
           <Heatmap compact data={data.heatmap} />
           <p className="card-footnote">
-            <Sparkles size={14} /> Você tende a descobrir mais música nas noites de sexta.
+            <Sparkles size={14} /> O mapa é calculado pelas suas escutas registradas.
           </p>
         </article>
       </section>
 
       <section className="level-banner">
-        <div className="level-banner__orb">18</div>
+        <div className="level-banner__orb">{data.viewer.level}</div>
         <div className="level-banner__copy">
-          <p>VOCÊ ESTÁ EVOLUINDO</p>
-          <h3>760 XP para o nível 19</h3>
-          <ProgressBar value={81} />
-          <span>
-            Continue explorando para desbloquear a moldura <b>Violeta Cósmico</b>.
-          </span>
+          <p>EVOLUÇÃO REAL</p>
+          <h3>
+            {remainingXp > 0
+              ? `${remainingXp} XP para o nível ${data.viewer.level + 1}`
+              : 'Novo nível desbloqueado'}
+          </h3>
+          <ProgressBar value={(data.viewer.xp / data.viewer.nextLevelXp) * 100} />
+          <span>XP é concedido a partir do tempo realmente registrado pelo Spotify.</span>
         </div>
         <button onClick={() => onChangeView('desafios')}>
           Ver missões <ArrowRight size={15} />
         </button>
       </section>
+    </div>
+  );
+}
+
+function EmptyCard({ text }: { text: string }) {
+  return (
+    <div className="empty-card">
+      <Music2 size={18} />
+      <span>{text}</span>
     </div>
   );
 }

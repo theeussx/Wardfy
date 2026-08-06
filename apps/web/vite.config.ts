@@ -6,6 +6,12 @@ import react from '@vitejs/plugin-react';
 
 const workspaceDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(workspaceDirectory, '../..');
+
+/**
+ * Vite only exposes VITE_* values to browser code and evaluates its config
+ * before normal app modules. Load the repository-root env explicitly so this
+ * works exactly like the API and the bot when started through npm workspaces.
+ */
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, repositoryRoot, '');
 

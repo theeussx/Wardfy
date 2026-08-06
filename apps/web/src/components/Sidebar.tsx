@@ -11,19 +11,14 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-import type { ViewKey } from '../types';
+import type { CurrentUserResponse, GuildSummary, ViewKey } from '../types';
 
-const navigation: Array<{
-  id: ViewKey;
-  label: string;
-  icon: typeof LayoutDashboard;
-  badge?: string;
-}> = [
+const navigation: Array<{ id: ViewKey; label: string; icon: typeof LayoutDashboard }> = [
   { id: 'inicio', label: 'Visão geral', icon: LayoutDashboard },
-  { id: 'atividade', label: 'Atividade ao vivo', icon: Headphones, badge: '3' },
+  { id: 'atividade', label: 'Atividade ao vivo', icon: Headphones },
   { id: 'ranking', label: 'Rankings', icon: Crown },
   { id: 'dna', label: 'DNA musical', icon: Compass },
-  { id: 'desafios', label: 'Desafios', icon: Award, badge: '2' },
+  { id: 'desafios', label: 'Desafios', icon: Award },
   { id: 'historico', label: 'Histórico', icon: History },
 ];
 
@@ -32,9 +27,22 @@ interface SidebarProps {
   onChange: (view: ViewKey) => void;
   open: boolean;
   onClose: () => void;
+  identity: CurrentUserResponse;
+  guild?: GuildSummary;
+  onGuildChange: (guildId: string | null) => void;
 }
 
-export function Sidebar({ active, onChange, open, onClose }: SidebarProps) {
+export function Sidebar({
+  active,
+  onChange,
+  open,
+  onClose,
+  identity,
+  guild,
+  onGuildChange,
+}: SidebarProps) {
+  const user = identity.user;
+  const availableGuilds = identity.guilds;
   return (
     <>
       <button
@@ -56,14 +64,29 @@ export function Sidebar({ active, onChange, open, onClose }: SidebarProps) {
         </div>
 
         <div className="sidebar-server">
-          <div className="sidebar-server__icon">WL</div>
+          {guild?.iconUrl ? (
+            <img alt="" className="sidebar-server__image" src={guild.iconUrl} />
+          ) : (
+            <div className="sidebar-server__icon">{guild ? initials(guild.name) : 'EU'}</div>
+          )}
           <div>
-            <strong>Wardfy Lab</strong>
+            <strong>{guild?.name ?? 'Sua biblioteca'}</strong>
             <span>
-              <i /> 248 membros
+              <i /> {guild ? `${guild.members} membros` : 'dados pessoais'}
             </span>
           </div>
-          <BarChart3 size={15} />
+          <select
+            aria-label="Selecionar servidor"
+            value={guild?.id ?? ''}
+            onChange={(event) => onGuildChange(event.target.value || null)}
+          >
+            <option value="">Biblioteca pessoal</option>
+            {availableGuilds.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <nav className="main-nav" aria-label="Navegação principal">
@@ -89,7 +112,6 @@ export function Sidebar({ active, onChange, open, onClose }: SidebarProps) {
                 )}
                 <Icon size={18} strokeWidth={selected ? 2.3 : 1.8} />
                 <span>{item.label}</span>
-                {item.badge && <b>{item.badge}</b>}
               </button>
             );
           })}
@@ -115,21 +137,34 @@ export function Sidebar({ active, onChange, open, onClose }: SidebarProps) {
 
         <div className="sidebar-footer">
           <div className="mini-profile">
-            <div className="mini-profile__avatar">
-              MT
-              <span />
-            </div>
+            {user?.avatarUrl ? (
+              <img className="mini-profile__image" src={user.avatarUrl} alt="" />
+            ) : (
+              <div className="mini-profile__avatar">
+                {initials(user?.name ?? 'Wardfy')}
+                <span />
+              </div>
+            )}
             <div>
-              <strong>Mateus</strong>
-              <small>Explorador Musical</small>
+              <strong>{user?.name ?? 'Wardfy'}</strong>
+              <small>{user?.title ?? 'Conta não conectada'}</small>
             </div>
-            <button aria-label="Abrir perfil">•••</button>
+            <BarChart3 size={15} />
           </div>
           <div className="sidebar-footer__note">
-            <span>✦</span> Wardfy Plus <b>Beta</b>
+            <span>●</span> Spotify <b>{user?.spotifyConnected ? 'ON' : 'OFF'}</b>
           </div>
         </div>
       </aside>
     </>
   );
+}
+
+function initials(value: string): string {
+  return value
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0] ?? '')
+    .join('')
+    .toUpperCase();
 }

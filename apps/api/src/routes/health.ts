@@ -6,7 +6,7 @@ export const healthRoutes: FastifyPluginAsync<{ config: AppConfig }> = async (ap
   const status = () => ({
     status: 'ok',
     service: 'wardfy-api',
-    mode: config.DEMO_MODE ? 'demo' : 'production',
+    mode: 'production',
     timestamp: new Date().toISOString(),
   });
 

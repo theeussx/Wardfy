@@ -5,7 +5,7 @@ import type {
   StoredSpotifyAccount,
 } from './spotify-account.repository.js';
 
-/** PostgreSQL implementation used when DEMO_MODE=false. */
+/** PostgreSQL implementation for encrypted Spotify account storage. */
 export class PrismaSpotifyAccountRepository implements SpotifyAccountRepository {
   constructor(private readonly prisma: PrismaClient) {}
 

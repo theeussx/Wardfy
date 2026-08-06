@@ -1,16 +1,13 @@
 import {
   Activity as ActivityIcon,
-  BellRing,
-  ChevronRight,
-  Clock3,
   Hash,
   MonitorUp,
   Music2,
   RadioTower,
   Send,
-  Smartphone,
   UsersRound,
 } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 import { AlbumArtwork, ColorAvatar } from '../components/AlbumArtwork';
 import { ProgressBar, formatClock } from '../components/ProgressBar';
@@ -26,7 +23,47 @@ export function ActivityView({
   onToast: (text: string) => void;
 }) {
   const track = data.nowPlaying.track;
-  const activeFriends = data.friends.filter((friend) => friend.status === 'playing');
+  const listeners = [
+    ...(data.nowPlaying.isPlaying && track
+      ? [
+          {
+            id: data.viewer.id,
+            discordId: data.viewer.discordId,
+            name: data.viewer.name,
+            initials: initials(data.viewer.name),
+            color: '#2563eb',
+            track: track.title,
+            artist: track.artists.join(', '),
+            album: track.album,
+            albumArtUrl: track.albumArtUrl,
+            progressMs,
+            durationMs: track.durationMs,
+            device: data.nowPlaying.deviceName,
+            spotifyUrl: track.spotifyUrl,
+            current: true,
+          },
+        ]
+      : []),
+    ...data.friends
+      .filter((friend) => friend.status === 'playing')
+      .map((friend) => ({
+        id: friend.id,
+        discordId: friend.discordId,
+        name: friend.name,
+        initials: friend.initials,
+        color: friend.color,
+        track: friend.track ?? 'Faixa sem título',
+        artist: friend.artist ?? 'Artista desconhecido',
+        album: 'Reprodução ao vivo',
+        albumArtUrl: friend.albumArtUrl,
+        progressMs: 0,
+        durationMs: 1,
+        device: 'Spotify',
+        spotifyUrl: 'https://open.spotify.com/',
+        current: false,
+      })),
+  ];
+
   return (
     <div className="page-stack activity-view">
       <section className="live-hero surface-card">
@@ -41,23 +78,20 @@ export function ActivityView({
             PRESENÇA AO VIVO
           </div>
           <h2>
-            3 pessoas estão deixando
-            <br />
-            <em>rastros de som</em> agora.
+            {listeners.length > 0
+              ? `${listeners.length} ${listeners.length === 1 ? 'pessoa está' : 'pessoas estão'} deixando rastros de som.`
+              : 'O próximo som vai acender o servidor.'}
           </h2>
           <p>
-            Uma camada social discreta para acompanhar o ritmo da comunidade sem inundar o chat.
+            Wardfy lê a atividade conectada ao Spotify, atualiza o painel em tempo real e mantém o
+            canal do Discord livre de spam.
           </p>
           <div>
             <button
               className="primary-action"
-              onClick={() => onToast('Canal #🎧-tocando-agora destacado.')}
+              onClick={() => onToast('Configure o canal com /configurar no Discord.')}
             >
-              {' '}
-              <RadioTower size={16} /> Abrir canal de atividade
-            </button>
-            <button className="ghost-action" onClick={() => onToast('Link da atividade copiado.')}>
-              Compartilhar presença
+              <RadioTower size={16} /> Configurar canal de atividade
             </button>
           </div>
         </div>
@@ -67,24 +101,19 @@ export function ActivityView({
           <span className="orbital-core">
             <Music2 size={30} />
           </span>
-          <ColorAvatar
-            color="#FF7A59"
-            initials="LI"
-            size="small"
-            style={{ position: 'absolute', top: '11%', left: '15%' }}
-          />
-          <ColorAvatar
-            color="#8B5CF6"
-            initials="MT"
-            size="medium"
-            style={{ position: 'absolute', right: '9%', top: '38%' }}
-          />
-          <ColorAvatar
-            color="#5B8CFF"
-            initials="EZ"
-            size="small"
-            style={{ position: 'absolute', bottom: '12%', left: '23%' }}
-          />
+          {listeners.slice(0, 3).map((item, index) => (
+            <ColorAvatar
+              key={item.id}
+              color={item.color}
+              initials={item.initials}
+              size={index === 0 ? 'medium' : 'small'}
+              style={{
+                position: 'absolute',
+                top: `${14 + index * 28}%`,
+                left: `${18 + index * 26}%`,
+              }}
+            />
+          ))}
         </div>
       </section>
 
@@ -96,46 +125,26 @@ export function ActivityView({
               <h3>Quem está na mesma frequência</h3>
             </div>
             <span className="online-count">
-              <i /> 3 ativos
+              <i /> {listeners.length} ativos
             </span>
           </div>
-          <div className="live-list">
-            <LiveListener
-              artwork="deftones"
-              color="#8B5CF6"
-              initials="MT"
-              name="Mateus"
-              track={track?.title ?? 'Be Quiet and Drive'}
-              artist={track?.artists.join(', ') ?? 'Deftones'}
-              device="MacBook Pro"
-              progress={(progressMs / (track?.durationMs ?? 1)) * 100}
-              time={`${formatClock(progressMs)} / ${formatClock(track?.durationMs ?? 0)}`}
-              current
-            />
-            {activeFriends.map((friend, index) => (
-              <LiveListener
-                artwork={index === 0 ? 'muse' : 'frank'}
-                color={friend.color}
-                initials={friend.initials}
-                key={friend.id}
-                name={friend.name}
-                track={friend.track ?? 'Faixa desconhecida'}
-                artist={friend.artist ?? 'Artista desconhecido'}
-                device={index === 0 ? 'iPhone' : 'Web Player'}
-                progress={index === 0 ? 47 : 39}
-                time={index === 0 ? '1:42 / 3:47' : '2:08 / 5:09'}
-              />
-            ))}
-          </div>
+          {listeners.length === 0 ? (
+            <EmptyActivity />
+          ) : (
+            <div className="live-list">
+              {listeners.map((listener) => (
+                <LiveListener key={listener.id} {...listener} />
+              ))}
+            </div>
+          )}
         </article>
-
         <aside className="activity-side-stack">
           <article className="surface-card activity-channel-card">
             <div className="channel-heading">
               <span>
-                <Hash size={17} /> tocando-agora
+                <Hash size={17} /> atividade-musical
               </span>
-              <button onClick={() => onToast('Configurações do canal abertas.')}>•••</button>
+              <button onClick={() => onToast('Use /configurar para escolher o canal.')}>•••</button>
             </div>
             <div className="discord-preview">
               <div className="discord-preview__bot">
@@ -143,21 +152,17 @@ export function ActivityView({
                 <strong>
                   Wardfy <b>BOT</b>
                 </strong>
-                <small>Hoje às 21:42</small>
+                <small>em tempo real</small>
               </div>
               <div className="discord-preview__message">
-                <b>🎵 Mateus está ouvindo</b>
-                <span>Deftones — Be Quiet and Drive</span>
-                <small>Around the Fur · MacBook Pro</small>
-              </div>
-              <div className="discord-preview__reacts">
-                <span>🔥 4</span>
-                <span>🖤 2</span>
-                <button>+</button>
+                <b>🎵 Mensagens atualizáveis</b>
+                <span>Uma única mensagem por pessoa ouvindo.</span>
+                <small>O bot edita o card ao trocar de faixa ou encerrar a sessão.</small>
               </div>
             </div>
             <p>
-              <ActivityIcon size={14} /> Mensagens são atualizadas, nunca duplicadas.
+              <ActivityIcon size={14} /> A atividade é persistida para não duplicar mensagens após
+              reinícios.
             </p>
           </article>
           <article className="surface-card activity-insight-card">
@@ -165,12 +170,18 @@ export function ActivityView({
               <UsersRound size={20} />
             </span>
             <div>
-              <p className="eyebrow">ENCONTRO SONORO</p>
+              <p className="eyebrow">SINTONIA DA COMUNIDADE</p>
               <h3>
-                Lia e você têm <b>82%</b> de compatibilidade.
+                {data.friends.length > 0
+                  ? `${data.friends.length} membros com presença ativa.`
+                  : 'Convide membros para conectar Spotify e entrar na atividade.'}
               </h3>
-              <button onClick={() => onToast('Comparação com Lia carregada.')}>
-                Comparar agora <ChevronRight size={14} />
+              <button
+                onClick={() =>
+                  onToast('A compatibilidade é calculada no DNA musical dos membros conectados.')
+                }
+              >
+                Como funciona
               </button>
             </div>
           </article>
@@ -180,41 +191,31 @@ export function ActivityView({
       <section className="activity-timeline surface-card">
         <div className="card-heading">
           <div>
-            <p className="eyebrow">LINHA DO TEMPO</p>
-            <h3>O pulso recente da comunidade</h3>
+            <p className="eyebrow">STATUS DA SINCRONIZAÇÃO</p>
+            <h3>Atividade processada pela API Wardfy</h3>
           </div>
-          <button className="text-action" onClick={() => onToast('Filtro de atividade aberto.')}>
-            Filtrar <ChevronRight size={14} />
-          </button>
         </div>
         <div className="timeline-events">
           <TimelineEvent
             icon={<Send size={15} />}
-            color="violet"
-            time="agora"
-            title="Você compartilhou"
-            detail="Be Quiet and Drive no canal de atividade."
-          />
-          <TimelineEvent
-            icon={<BellRing size={15} />}
-            color="lime"
-            time="há 7 min"
-            title="Lia desbloqueou"
-            detail="a conquista Caçadora de Hits."
-          />
-          <TimelineEvent
-            icon={<Smartphone size={15} />}
-            color="orange"
-            time="há 18 min"
-            title="Enzo iniciou uma sessão"
-            detail="no Spotify Web Player."
-          />
-          <TimelineEvent
-            icon={<Clock3 size={15} />}
             color="blue"
-            time="há 32 min"
-            title="Maya encerrou a sessão"
-            detail="com 48 min de música."
+            time="agora"
+            title="Spotify → Wardfy"
+            detail="A reprodução conectada é registrada e agregada."
+          />
+          <TimelineEvent
+            icon={<ActivityIcon size={15} />}
+            color="cyan"
+            time="contínuo"
+            title="Wardfy → Discord"
+            detail="O card do canal é atualizado sem spam."
+          />
+          <TimelineEvent
+            icon={<MonitorUp size={15} />}
+            color="navy"
+            time="a cada ciclo"
+            title="Presença → painel"
+            detail="O dashboard recebe eventos por streaming SSE."
           />
         </div>
       </section>
@@ -223,46 +224,58 @@ export function ActivityView({
 }
 
 function LiveListener({
-  artwork,
   color,
-  initials,
+  initials: valueInitials,
   name,
   track,
   artist,
+  album,
+  albumArtUrl,
+  progressMs,
+  durationMs,
   device,
-  progress,
-  time,
-  current = false,
+  spotifyUrl,
+  current,
 }: {
-  artwork: 'deftones' | 'muse' | 'frank';
   color: string;
   initials: string;
   name: string;
   track: string;
   artist: string;
-  device: string;
-  progress: number;
-  time: string;
-  current?: boolean;
+  album: string;
+  albumArtUrl?: string;
+  progressMs: number;
+  durationMs: number;
+  device?: string;
+  spotifyUrl: string;
+  current: boolean;
 }) {
+  const progress = durationMs > 1 ? (progressMs / durationMs) * 100 : 0;
   return (
     <div className={`live-listener ${current ? 'live-listener--current' : ''}`}>
       <div className="live-listener__person">
-        <ColorAvatar color={color} initials={initials} size="medium" online />
+        <ColorAvatar color={color} initials={valueInitials} size="medium" online />
         <span>
           <b>{name}</b>
           <small>
-            <MonitorUp size={12} /> {device}
+            <MonitorUp size={12} /> {device ?? 'Spotify conectado'}
           </small>
         </span>
       </div>
-      <AlbumArtwork variant={artwork} size="small" />
+      <AlbumArtwork src={albumArtUrl} size="small" />
       <div className="live-listener__track">
         <b>{track}</b>
-        <small>{artist}</small>
+        <small>
+          {artist} · {album}
+        </small>
         <ProgressBar value={progress} />
       </div>
-      <span className="live-listener__time">{time}</span>
+      <button
+        className="live-listener__time"
+        onClick={() => window.open(spotifyUrl, '_blank', 'noopener,noreferrer')}
+      >
+        {durationMs > 1 ? `${formatClock(progressMs)} / ${formatClock(durationMs)}` : 'Spotify'}
+      </button>
     </div>
   );
 }
@@ -274,7 +287,7 @@ function TimelineEvent({
   title,
   detail,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   color: string;
   time: string;
   title: string;
@@ -290,4 +303,20 @@ function TimelineEvent({
       </div>
     </div>
   );
+}
+function EmptyActivity() {
+  return (
+    <div className="empty-card">
+      <Music2 size={18} />
+      <span>Nenhuma reprodução ativa no momento.</span>
+    </div>
+  );
+}
+function initials(value: string): string {
+  return value
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0] ?? '')
+    .join('')
+    .toUpperCase();
 }

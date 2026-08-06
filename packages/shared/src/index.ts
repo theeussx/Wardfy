@@ -1,8 +1,8 @@
 export const WARDIFY_BRAND = {
   name: 'Wardfy',
-  accent: 0x8b5cf6,
-  spotify: 0x1ed760,
-  discord: 0x5865f2,
+  accent: 0x0ea5e9,
+  spotify: 0x38bdf8,
+  discord: 0x2563eb,
 } as const;
 
 export type Period = 'day' | 'week' | 'month' | 'year' | 'all';
