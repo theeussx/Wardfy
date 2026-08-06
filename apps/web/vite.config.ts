@@ -1,32 +1,41 @@
-import { defineConfig } from 'vite';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    host: '0.0.0.0',
-    port: 5173,
-    allowedHosts: true,
-    proxy: {
-      '/api': {
-        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3001',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
-      },
-    },
-  },
-  preview: {
-    host: '0.0.0.0',
-    allowedHosts: true,
-  },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          react: ['react', 'react-dom', 'framer-motion'],
-          charts: ['recharts'],
+const workspaceDirectory = dirname(fileURLToPath(import.meta.url));
+const repositoryRoot = resolve(workspaceDirectory, '../..');
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, repositoryRoot, '');
+
+  return {
+    plugins: [react()],
+    server: {
+      host: '0.0.0.0',
+      port: 5173,
+      allowedHosts: true,
+      proxy: {
+        '/api': {
+          target: env.VITE_API_PROXY_TARGET || 'http://localhost:3001',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api/, ''),
         },
       },
     },
-  },
+    preview: {
+      host: '0.0.0.0',
+      allowedHosts: true,
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            react: ['react', 'react-dom', 'framer-motion'],
+            charts: ['recharts'],
+          },
+        },
+      },
+    },
+  };
 });

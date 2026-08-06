@@ -40,6 +40,8 @@ npm run dev:bot
 npm run dev:full
 ```
 
+> O arquivo **`.env` na raiz do repositório** é carregado automaticamente pela API, pelo bot e pela configuração do Vite — inclusive quando o npm executa scripts dentro de workspaces. Não é necessário copiar credenciais para subpastas. Somente variáveis com prefixo `VITE_` são expostas ao browser.
+
 ---
 
 ## Arquitetura
@@ -124,7 +126,7 @@ No [Discord Developer Portal](https://discord.com/developers/applications):
 
 1. Configure o callback `http://localhost:3001/v1/auth/discord/callback`.
 2. Crie o bot, habilite-o para `applications.commands` e convide-o com escopos `bot applications.commands`.
-3. Preencha as variáveis `DISCORD_*` na `.env`.
+3. Preencha as variáveis `DISCORD_*` na `.env`. No portal do Discord, **Client ID** e **Application ID** são o mesmo valor; o bot aceita `DISCORD_APPLICATION_ID` ou usa `DISCORD_CLIENT_ID` como fallback.
 4. Registre os comandos:
 
 ```bash

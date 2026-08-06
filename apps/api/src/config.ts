@@ -1,4 +1,10 @@
+import { config as loadDotenv } from 'dotenv';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+const moduleDirectory = dirname(fileURLToPath(import.meta.url));
+loadDotenv({ path: resolve(moduleDirectory, '../../../.env') });
+loadDotenv({ path: resolve(process.cwd(), '.env') });
 
 const booleanFromEnv = z
   .enum(['true', 'false'])
