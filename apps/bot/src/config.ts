@@ -20,7 +20,8 @@ const schema = z.object({
   DISCORD_APPLICATION_ID: z.string().min(1).optional(),
   DISCORD_DEV_GUILD_ID: z.string().min(1).optional(),
   API_ORIGIN: z.string().url(),
-  BOT_API_TOKEN: z.string().min(32).optional(),
+  // Must match the API token. Existing 16+ character tokens remain supported.
+  BOT_API_TOKEN: z.string().min(16).optional(),
   ACTIVITY_SYNC_INTERVAL_SECONDS: z.coerce.number().int().min(15).max(300).default(30),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 });

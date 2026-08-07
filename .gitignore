@@ -1,5 +1,6 @@
 # Dependencies and build artifacts
 node_modules/
+package-lock.json
 dist/
 coverage/
 .vite/
@@ -15,6 +16,8 @@ coverage/
 # Local services
 postgres-data/
 redis-data/
+migrations/
+wardfy.session.sql
 
 # Logs
 *.log
