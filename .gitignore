@@ -16,7 +16,6 @@ coverage/
 # Local services
 postgres-data/
 redis-data/
-migrations/
 wardfy.session.sql
 
 # Logs
