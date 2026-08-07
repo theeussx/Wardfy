@@ -25,6 +25,10 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: env.VITE_API_PROXY_TARGET || 'http://localhost:3001',
           changeOrigin: true,
+          // Codespaces forwards the browser's public Origin. Forward the
+          // configured APP_ORIGIN explicitly so API CORS and OAuth cookies see
+          // the same canonical dashboard origin.
+          headers: { origin: env.APP_ORIGIN || 'http://localhost:5173' },
           rewrite: (path) => path.replace(/^\/api/, ''),
         },
       },

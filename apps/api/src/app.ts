@@ -46,6 +46,10 @@ function hasStatusCode(value: unknown): value is { statusCode: number } {
   );
 }
 
+function normalizeOrigin(value: string): string {
+  return value.replace(/\/$/, '');
+}
+
 export async function buildApp(config = loadConfig()): Promise<WardfyApp> {
   const app = Fastify({
     logger: {
@@ -79,10 +83,12 @@ export async function buildApp(config = loadConfig()): Promise<WardfyApp> {
   await data.ensureSystemAchievements();
   app.wardfy = { config, cache, activityBus, data, playbackSync };
 
+  const allowedOrigins = new Set([normalizeOrigin(config.APP_ORIGIN)]);
   await app.register(cors, {
     origin(origin, callback) {
-      // Browser traffic uses the Vite/nginx relative proxy. Explicitly allow only the dashboard origin for direct API requests.
-      if (!origin || origin === config.APP_ORIGIN) return callback(null, true);
+      // Browser traffic uses the Vite/nginx relative proxy. Only the configured
+      // public dashboard origin is accepted; no Origin is used by bot/internal traffic.
+      if (!origin || allowedOrigins.has(normalizeOrigin(origin))) return callback(null, true);
       return callback(new Error('Origin is not allowed by Wardfy CORS policy.'), false);
     },
     credentials: true,

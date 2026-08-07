@@ -112,9 +112,10 @@ model Guild {
   updatedAt   DateTime       @updatedAt
   settings    GuildSettings?
   members     GuildMember[]
-  challenges  Challenge[]
-  events      ListeningEvent[]
-  activityLog AuditLog[]
+  challenges       Challenge[]
+  events           ListeningEvent[]
+  activityMessages ActivityMessage[]
+  activityLog      AuditLog[]
 }
 
 model GuildSettings {
