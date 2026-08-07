@@ -55,11 +55,23 @@ O schema e as migrations estão em `apps/api/prisma`. A migration `2026080610000
 
 ```bash
 npm run dev
+# ou API + painel + bot:
+npm run dev:full
 ```
+
+`dev:api` agora verifica PostgreSQL e Redis antes de iniciar. Se `DATABASE_URL` e `REDIS_URL` apontarem para `localhost`, ele sobe automaticamente os serviços `postgres` e `redis` do Docker Compose, gera o Prisma Client e aplica migrations pendentes. O bot espera o endpoint `/health` da API antes de conectar ao Discord.
 
 - Painel: `http://localhost:5173`
 - API: `http://localhost:3001`
 - Swagger: `http://localhost:3001/docs`
+
+Comandos auxiliares:
+
+```bash
+npm run infra:up      # valida ou sobe PostgreSQL + Redis locais
+npm run db:prepare    # prisma generate + prisma migrate deploy
+npm run infra:down    # encerra a infraestrutura Docker local
+```
 
 ### 4. Instale e inicie o bot
 
