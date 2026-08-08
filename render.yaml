@@ -1,113 +1,191 @@
-# Render Blueprint — Wardfy (API + Web + Postgres + Redis)
-# Bot está em outro host (conforme solicitação).
-# Ajuste os valores de APP_ORIGIN / API_ORIGIN após o primeiro deploy.
+# Render Blueprint — Wardfy
+# API + Web + PostgreSQL + Redis
+#
+# O bot Discord roda em outro host.
 
 services:
+
+  # ============================================================
+  # POSTGRESQL
+  # ============================================================
+
   - type: pserv
     name: postgres
+    runtime: image
+
     image:
-      imageName: postgres:16-alpine
+      url: postgres:16-alpine
+
     envVars:
       - key: POSTGRES_DB
         value: wardfy
+
       - key: POSTGRES_USER
         value: wardfy
+
+      # Configure a senha real no Dashboard do Render.
       - key: POSTGRES_PASSWORD
-        value: wardfy
+        sync: false
+
     disk:
       name: postgres-data
       mountPath: /var/lib/postgresql/data
       sizeGB: 10
 
+
+  # ============================================================
+  # REDIS
+  # ============================================================
+
   - type: pserv
     name: redis
+    runtime: image
+
     image:
-      imageName: redis:7-alpine
-    command: redis-server --appendonly yes
+      url: redis:7-alpine
+
+    dockerCommand: redis-server --appendonly yes
+
     disk:
       name: redis-data
       mountPath: /data
       sizeGB: 5
 
+
+  # ============================================================
+  # API
+  # ============================================================
+
   - type: web
     name: api
     runtime: docker
+
     dockerfilePath: ./apps/api/Dockerfile
+
     envVars:
       - key: NODE_ENV
         value: production
+
       - key: HOST
         value: 0.0.0.0
+
       - key: PORT
         value: "3001"
+
+      # IMPORTANTE:
+      # Como o PostgreSQL é um container próprio,
+      # coloque aqui a URL usando a mesma senha definida
+      # em POSTGRES_PASSWORD.
       - key: DATABASE_URL
-        value: postgresql://wardfy:wardfy@postgres:5432/wardfy?schema=public
+        sync: false
+
+      # Redis pode ser acessado pela rede privada do Render.
       - key: REDIS_URL
         value: redis://redis:6379
-      # Atualize esses valores no Dashboard da Render após o primeiro deploy
+
+      # Atualizar depois do primeiro deploy.
       - key: APP_ORIGIN
-        value: https://onrender.com
+        sync: false
+
       - key: API_ORIGIN
-        value: https://onrender.com
-      # Callbacks do OAuth devem apontar para a API (-api), não para o WEB (-web)
+        sync: false
+
+      # OAuth
       - key: SPOTIFY_REDIRECT_URI
-        value: https://onrender.com/api/v1/auth/spotify/callback
+        sync: false
+
       - key: DISCORD_REDIRECT_URI
-        value: https://onrender.com/api/v1/auth/discord/callback
-      - key: VITE_API_PROXY_TARGET
-        value: http://api:3001
-      # SEGREDOS — configure manualmente no Dashboard da Render (não comite!)
-      # TOKEN_ENCRYPTION_KEY, OAUTH_STATE_SECRET, SPOTIFY_CLIENT_ID,
-      # SPOTIFY_CLIENT_SECRET, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET,
-      # DISCORD_BOT_TOKEN, DISCORD_APPLICATION_ID, DISCORD_DEV_GUILD_ID,
-      # BOT_API_TOKEN
+        sync: false
+
+      # Segredos
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+
+      - key: OAUTH_STATE_SECRET
+        sync: false
+
+      - key: SPOTIFY_CLIENT_ID
+        sync: false
+
+      - key: SPOTIFY_CLIENT_SECRET
+        sync: false
+
+      - key: DISCORD_CLIENT_ID
+        sync: false
+
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+
+      - key: DISCORD_APPLICATION_ID
+        sync: false
+
+      - key: DISCORD_DEV_GUILD_ID
+        sync: false
+
+      - key: BOT_API_TOKEN
+        sync: false
+
+      # Configurações
       - key: PLAYBACK_POLL_INTERVAL_SECONDS
         value: "30"
+
       - key: SPOTIFY_SYNC_CONCURRENCY
         value: "4"
+
       - key: ACTIVITY_SYNC_INTERVAL_SECONDS
         value: "30"
+
     disk:
       name: api-tmp
       mountPath: /tmp
       sizeGB: 1
+
     buildFilter:
       paths:
         - apps/api/**
         - packages/shared/**
         - apps/api/Dockerfile
         - scripts/render-entry.mjs
+
       ignoredPaths:
         - apps/web/**
         - apps/bot/**
 
+
+  # ============================================================
+  # WEB
+  # ============================================================
+
   - type: web
     name: web
     runtime: docker
+
     dockerfilePath: ./apps/web/Dockerfile
+
     envVars:
       - key: NODE_ENV
         value: production
-      # Evita a porta 80 dentro do container por restrições de permissão Root
+
       - key: PORT
         value: "3000"
-    buildFilter:
-      paths:
-        - apps/web/**
-        - apps/web/Dockerfile
-      ignoredPaths:
-        - apps/api/**
-        - apps/bot/**
+
+      # Proxy interno para a API.
+      - key: VITE_API_PROXY_TARGET
+        value: http://api:3001
+
     disk:
       name: web-tmp
       mountPath: /tmp
       sizeGB: 1
 
-# Notas de deploy:
-# 1. Crie um novo Blueprint na Render apontando para este repo.
-# 2. No primeiro deploy, copie as URLs reais dos serviços api/web do Dashboard
-#    e atualize APP_ORIGIN, API_ORIGIN, SPOTIFY_REDIRECT_URI e DISCORD_REDIRECT_URI.
-# 3. Registre os redirect URIs no painel Spotify e Discord.
-# 4. Defina todos os valores de "sync: false" no Dashboard (não versione secrets).
-# 5. O bot (Discord) deve rodar separadamente (ex: Railway, VPS, AWS) apontando
-#    para https://<api-url>/ com BOT_API_TOKEN igual ao da API.
+    buildFilter:
+      paths:
+        - apps/web/**
+        - apps/web/Dockerfile
+
+      ignoredPaths:
+        - apps/api/**
+        - apps/bot/**
