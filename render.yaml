@@ -5,8 +5,8 @@
 services:
   - type: pserv
     name: postgres
-    runtime: docker
-    image: postgres:16-alpine
+    image:
+      imageName: postgres:16-alpine
     envVars:
       - key: POSTGRES_DB
         value: wardfy
@@ -21,8 +21,8 @@ services:
 
   - type: pserv
     name: redis
-    runtime: docker
-    image: redis:7-alpine
+    image:
+      imageName: redis:7-alpine
     command: redis-server --appendonly yes
     disk:
       name: redis-data
@@ -46,14 +46,14 @@ services:
         value: redis://redis:6379
       # Atualize esses valores no Dashboard da Render após o primeiro deploy
       - key: APP_ORIGIN
-        value: https://wardfy-web.onrender.com
+        value: https://onrender.com
       - key: API_ORIGIN
-        value: https://wardfy-api.onrender.com
-      # CORREÇÃO: Callbacks do OAuth devem apontar para a API (-api), não para o WEB (-web)
+        value: https://onrender.com
+      # Callbacks do OAuth devem apontar para a API (-api), não para o WEB (-web)
       - key: SPOTIFY_REDIRECT_URI
-        value: https://wardfy-api.onrender.com/api/v1/auth/spotify/callback
+        value: https://onrender.com/api/v1/auth/spotify/callback
       - key: DISCORD_REDIRECT_URI
-        value: https://wardfy-api.onrender.com/api/v1/auth/discord/callback
+        value: https://onrender.com/api/v1/auth/discord/callback
       - key: VITE_API_PROXY_TARGET
         value: http://api:3001
       # SEGREDOS — configure manualmente no Dashboard da Render (não comite!)
@@ -88,7 +88,7 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # CORREÇÃO: Evite a porta 80 dentro do container por restrições de permissão Root
+      # Evita a porta 80 dentro do container por restrições de permissão Root
       - key: PORT
         value: "3000"
     buildFilter:
