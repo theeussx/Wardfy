@@ -8,12 +8,32 @@ const moduleDirectory = dirname(fileURLToPath(import.meta.url));
 loadDotenv({ path: resolve(moduleDirectory, '../../../.env') });
 loadDotenv({ path: resolve(process.cwd(), '.env') });
 
+/**
+ * GitHub Codespaces exposes every forwarded port as
+ * `https://<codespace>-<port>.app.github.dev`. Detecting this lets a fresh
+ * remote workspace get correct public URLs (and therefore working OAuth
+ * redirects) without manually wiring `APP_ORIGIN`/`API_ORIGIN`.
+ */
+function detectCodespaceOrigin(port: number): string | null {
+  const name = process.env.CODESPACE_NAME;
+  if (name) return `https://${name}-${port}.app.github.dev`;
+  return null;
+}
+
+function defaultAppOrigin(): string {
+  return detectCodespaceOrigin(5173) ?? 'http://127.0.0.1:5173';
+}
+
+function defaultApiOrigin(): string {
+  return detectCodespaceOrigin(3001) ?? 'http://127.0.0.1:3001';
+}
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3001),
   HOST: z.string().default('0.0.0.0'),
-  APP_ORIGIN: z.string().url(),
-  API_ORIGIN: z.string().url(),
+  APP_ORIGIN: z.string().url().default(defaultAppOrigin),
+  API_ORIGIN: z.string().url().default(defaultApiOrigin),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().url(),
   TOKEN_ENCRYPTION_KEY: z.string().min(40),

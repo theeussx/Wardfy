@@ -61,9 +61,16 @@ npm run dev:full
 
 `dev:api` agora verifica PostgreSQL e Redis antes de iniciar. Se `DATABASE_URL` e `REDIS_URL` apontarem para `localhost`, ele sobe automaticamente os serviços `postgres` e `redis` do Docker Compose, gera o Prisma Client e aplica migrations pendentes. O bot espera o endpoint `/health` da API antes de conectar ao Discord.
 
-- Painel: `http://localhost:5173`
-- API: `http://localhost:3001`
-- Swagger: `http://localhost:3001/docs`
+- Painel: `http://127.0.0.1:5173`
+- API: `http://127.0.0.1:3001`
+- Swagger: `http://127.0.0.1:3001/docs`
+
+> Use `127.0.0.1` (não `localhost`) no desenvolvimento local. O Spotify **não
+> aceita** `localhost` como redirect URI desde 2025 — apenas HTTPS ou loopback
+> IP explícito (`http://127.0.0.1:PORT`). Manter `127.0.0.1` em toda a cadeia
+> (painel, API e callbacks) garante que cookie, redirect e callback compartilhem
+> a mesma origem. Em GitHub Codespaces, `APP_ORIGIN`/`API_ORIGIN` são detectados
+> automaticamente a partir de `CODESPACE_NAME`.
 
 Comandos auxiliares:
 
@@ -78,9 +85,20 @@ npm run infra:down    # encerra a infraestrutura Docker local
 No Discord Developer Portal, use os callbacks:
 
 ```text
-http://localhost:3001/v1/auth/discord/callback
-http://localhost:3001/v1/auth/spotify/callback
+http://127.0.0.1:3001/v1/auth/discord/callback
+http://127.0.0.1:3001/v1/auth/spotify/callback
 ```
+
+> **Em GitHub Codespaces / ambiente remoto**, os callbacks devem apontar para a
+> URL pública do painel através do proxy `/api`:
+>
+> ```text
+> https://<codespace>-5173.app.github.dev/api/v1/auth/discord/callback
+> https://<codespace>-5173.app.github.dev/api/v1/auth/spotify/callback
+> ```
+>
+> O valor registrado no provider deve ser **exatamente** igual ao `redirect_uri`
+> usado pelo fluxo (mesmo path, porta e sem trailing slash extra).
 
 Convide a aplicação para o servidor com os scopes:
 

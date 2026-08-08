@@ -23,7 +23,7 @@ const guildQuery = z.object({ guildId: z.string().min(1).max(32).optional() });
 
 const guildSettingsSchema = z.object({
   activityChannelId: z.string().max(32).nullable().optional(),
-  activityUpdateSeconds: z.number().int().min(15).max(300).optional(),
+  activityUpdateSeconds: z.number().int().min(1).max(300).optional(),
   notificationsEnabled: z.boolean().optional(),
   automaticRolesEnabled: z.boolean().optional(),
   allowMemberComparison: z.boolean().optional(),

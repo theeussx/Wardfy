@@ -32,20 +32,26 @@ function warnForRemoteLocalhostCallbacks(
   const remoteWorkspace = Boolean(
     process.env.CODESPACES || process.env.CODESPACE_NAME || process.env.GITPOD_WORKSPACE_URL,
   );
-  const callbacksUseLocalhost = [config.DISCORD_REDIRECT_URI, config.SPOTIFY_REDIRECT_URI].some(
+  const loopbackHosts = new Set(['localhost', '127.0.0.1', '::1']);
+  const originUsesLoopback = loopbackHosts.has(new URL(config.APP_ORIGIN).hostname);
+  const callbacksUseLoopback = [config.DISCORD_REDIRECT_URI, config.SPOTIFY_REDIRECT_URI].some(
     (value) => {
       try {
-        return ['localhost', '127.0.0.1', '::1'].includes(new URL(value).hostname);
+        return loopbackHosts.has(new URL(value).hostname);
       } catch {
         return false;
       }
     },
   );
 
-  if (remoteWorkspace && callbacksUseLocalhost) {
+  if (remoteWorkspace && (originUsesLoopback || callbacksUseLoopback)) {
     logger.warn(
-      { appOrigin: config.APP_ORIGIN },
-      'OAuth callbacks point to localhost in a remote workspace. Configure public APP_ORIGIN and provider callbacks through /api/v1/auth/... before logging in.',
+      {
+        appOrigin: config.APP_ORIGIN,
+        discordCallback: config.DISCORD_REDIRECT_URI,
+        spotifyCallback: config.SPOTIFY_REDIRECT_URI,
+      },
+      'APP_ORIGIN or an OAuth callback points to a loopback host in a remote workspace. The post-login redirect will fall back to the public request origin, but for full provider compatibility set APP_ORIGIN and both provider callbacks to the public https://<codespace>-5173.app.github.dev origin.',
     );
   }
 }

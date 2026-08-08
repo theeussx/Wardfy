@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { AppConfig } from '../config.js';
 import { AppError } from '../lib/app-error.js';
+import { resolveAppOrigin } from '../lib/public-url.js';
 import { SessionSigner } from '../lib/session.js';
 import { SignedState } from '../lib/signed-state.js';
 import type { UserRepository } from '../repositories/user.repository.js';
@@ -35,10 +36,12 @@ export const authRoutes: FastifyPluginAsync<AuthRouteOptions> = async (app, opti
     const { returnTo } = startQuery.parse(request.query);
     const state = options.state.issue('spotify', returnTo);
     reply.setCookie('wardfy_spotify_oauth', state, { ...cookieOptions, maxAge: 10 * 60 });
+    request.log.info({ returnTo }, '[OAuth] Spotify authorization started');
     return reply.redirect(options.spotify.buildAuthorizeUrl(state));
   });
 
   app.get('/spotify/callback', async (request, reply) => {
+    request.log.info('[OAuth] Spotify callback received');
     const { code, state, error } = callbackQuery.parse(request.query);
     if (error)
       throw new AppError(
@@ -60,6 +63,7 @@ export const authRoutes: FastifyPluginAsync<AuthRouteOptions> = async (app, opti
     }
 
     await options.spotify.exchangeAndStore(code, session.userId);
+    request.log.info({ userId: session.userId }, '[OAuth] Spotify token exchange successful');
     // Backfill the Spotify history that is available to the connected account.
     // A transient Spotify failure must not invalidate a successfully completed OAuth flow.
     await options.data.syncLibrary(session.userId).catch((syncError) => {
@@ -69,19 +73,21 @@ export const authRoutes: FastifyPluginAsync<AuthRouteOptions> = async (app, opti
       );
     });
     reply.clearCookie('wardfy_spotify_oauth', cookieOptions);
-    return reply.redirect(
-      toAppUrl(options.config.APP_ORIGIN, oauthState.returnTo, 'spotify=connected'),
-    );
+    const origin = resolveAppOrigin(options.config, request);
+    request.log.info({ origin, returnTo: oauthState.returnTo }, '[OAuth] Redirecting to frontend');
+    return reply.redirect(toAppUrl(origin, oauthState.returnTo, 'spotify=connected'));
   });
 
   app.get('/discord/start', async (request, reply) => {
     const { returnTo } = startQuery.parse(request.query);
     const state = options.state.issue('discord', returnTo);
     reply.setCookie('wardfy_discord_oauth', state, { ...cookieOptions, maxAge: 10 * 60 });
+    request.log.info({ returnTo }, '[OAuth] Discord authorization started');
     return reply.redirect(options.discord.buildAuthorizeUrl(state));
   });
 
   app.get('/discord/callback', async (request, reply) => {
+    request.log.info('[OAuth] Discord callback received');
     const { code, state, error } = callbackQuery.parse(request.query);
     if (error)
       throw new AppError(
@@ -94,6 +100,7 @@ export const authRoutes: FastifyPluginAsync<AuthRouteOptions> = async (app, opti
     }
     const oauthState = options.state.verify(state, 'discord');
     const { profile, guilds } = await options.discord.exchangeCode(code);
+    request.log.info('[OAuth] Discord token exchange successful');
     const avatarUrl = profile.avatar
       ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png?size=128`
       : undefined;
@@ -104,6 +111,7 @@ export const authRoutes: FastifyPluginAsync<AuthRouteOptions> = async (app, opti
       locale: profile.locale,
     });
     await options.data.syncDiscordGuildMemberships(user.id, profile.id, guilds);
+    request.log.info({ userId: user.id }, '[OAuth] User resolved');
 
     reply
       .setCookie('wardfy_session', options.sessions.issue(user.id, profile.id), {
@@ -111,9 +119,10 @@ export const authRoutes: FastifyPluginAsync<AuthRouteOptions> = async (app, opti
         maxAge: 7 * 24 * 60 * 60,
       })
       .clearCookie('wardfy_discord_oauth', cookieOptions);
-    return reply.redirect(
-      toAppUrl(options.config.APP_ORIGIN, oauthState.returnTo, 'discord=connected'),
-    );
+    request.log.info({ userId: user.id }, '[OAuth] Session created');
+    const origin = resolveAppOrigin(options.config, request);
+    request.log.info({ origin, returnTo: oauthState.returnTo }, '[OAuth] Redirecting to frontend');
+    return reply.redirect(toAppUrl(origin, oauthState.returnTo, 'discord=connected'));
   });
 
   app.post('/logout', async (_request, reply) => {

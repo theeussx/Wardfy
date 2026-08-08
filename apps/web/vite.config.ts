@@ -12,8 +12,22 @@ const repositoryRoot = resolve(workspaceDirectory, '../..');
  * before normal app modules. Load the repository-root env explicitly so this
  * works exactly like the API and the bot when started through npm workspaces.
  */
+// Mirrors the API's Codespaces detection so the public dashboard origin is the
+// same no matter which side resolves it (CORS allowlist and OAuth cookies must
+// agree on the canonical origin).
+function detectAppOrigin(): string {
+  const codespaceName = process.env.CODESPACE_NAME;
+  if (codespaceName) return `https://${codespaceName}-5173.app.github.dev`;
+  return 'http://127.0.0.1:5173';
+}
+
+const REMOTE_WORKSPACE = Boolean(
+  process.env.CODESPACES || process.env.CODESPACE_NAME || process.env.GITPOD_WORKSPACE_URL,
+);
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, repositoryRoot, '');
+  const appOrigin = env.APP_ORIGIN || detectAppOrigin();
 
   return {
     plugins: [react()],
@@ -23,12 +37,27 @@ export default defineConfig(({ mode }) => {
       allowedHosts: true,
       proxy: {
         '/api': {
-          target: env.VITE_API_PROXY_TARGET || 'http://localhost:3001',
+          target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:3001',
           changeOrigin: true,
-          // Codespaces forwards the browser's public Origin. Forward the
-          // configured APP_ORIGIN explicitly so API CORS and OAuth cookies see
-          // the same canonical dashboard origin.
-          headers: { origin: env.APP_ORIGIN || 'http://localhost:5173' },
+          // Forward the browser's real Host (public URL) and scheme so the API
+          // can reconstruct the public origin for the post-login redirect even
+          // when APP_ORIGIN is misconfigured. We also pass the canonical origin
+          // explicitly so API CORS sees the same dashboard origin it allows.
+          headers: { origin: appOrigin },
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq, req) => {
+              const host = req.headers.host;
+              if (host) proxyReq.setHeader('X-Forwarded-Host', host);
+              const incomingProto = req.headers['x-forwarded-proto'];
+              const proto = (Array.isArray(incomingProto) ? incomingProto[0] : incomingProto)
+                ?.split(',')[0]
+                ?.trim();
+              proxyReq.setHeader(
+                'X-Forwarded-Proto',
+                proto || (REMOTE_WORKSPACE ? 'https' : 'http'),
+              );
+            });
+          },
           rewrite: (path) => path.replace(/^\/api/, ''),
         },
       },

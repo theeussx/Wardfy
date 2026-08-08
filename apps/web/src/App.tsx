@@ -79,6 +79,27 @@ export default function App() {
     })();
   }, [refreshDashboard, refreshIdentity]);
 
+  // Consume the status the OAuth callbacks append to the return URL
+  // (?discord=connected / ?spotify=connected / ?error=...), surface a clear
+  // confirmation and remove the params so a refresh doesn't repeat it. The
+  // session cookie is already set by the callback, so /v1/me reflects it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const state = params.get('discord') || params.get('spotify');
+    const failed = params.get('error');
+    if (!state && !failed) return;
+    if (params.get('discord') === 'connected' || params.get('spotify') === 'connected') {
+      setToast(
+        params.get('spotify') === 'connected'
+          ? 'Spotify conectado com sucesso.'
+          : 'Discord conectado com sucesso.',
+      );
+    } else if (failed) {
+      setToast('Não foi possível concluir a autenticação.');
+    }
+    window.history.replaceState({}, '', window.location.pathname);
+  }, []);
+
   useEffect(() => {
     if (!identity?.authenticated || !identity.user?.spotifyConnected) return;
     void refreshDashboard().catch((cause) => setError(messageFrom(cause)));

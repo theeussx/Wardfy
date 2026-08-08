@@ -182,16 +182,20 @@ export async function handleCommand(
       if (!interaction.guildId) return replyGuildOnly(interaction);
       const channel = interaction.options.getChannel('canal_atividade');
       const interval = interaction.options.getInteger('intervalo');
+      const currentSettings = await api.guildSettings(interaction.guildId).catch(() => undefined);
+      const nextChannelId = channel ? channel.id : null;
+      const nextInterval = interval ?? currentSettings?.activityUpdateSeconds ?? 30;
+
       await api.updateGuildSettings(interaction.guildId, {
-        ...(channel ? { activityChannelId: channel.id } : {}),
-        ...(interval ? { activityUpdateSeconds: interval } : {}),
+        activityChannelId: nextChannelId,
+        activityUpdateSeconds: nextInterval,
       });
       const channelText = channel ? `<#${channel.id}>` : 'canal atual';
       await interaction.reply(
         asEphemeral(
           noticeCard(
             'Configuração salva',
-            `Atividade musical: ${channelText}${interval ? ` · atualização a cada ${interval}s` : ''}.`,
+            `Atividade musical: ${channelText} · atualização a cada ${nextInterval}s.`,
             0x1d4ed8,
           ),
         ),

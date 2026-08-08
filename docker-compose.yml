@@ -56,8 +56,12 @@ services:
       PORT: 3001
       DATABASE_URL: postgresql://wardfy:wardfy@postgres:5432/wardfy?schema=public
       REDIS_URL: redis://redis:6379
-      APP_ORIGIN: http://localhost:5173
-      API_ORIGIN: http://localhost:3001
+      # Loopback (not "localhost") keeps cookies/redirects consistent with the
+      # Spotify redirect URI requirement. For a remote deploy set these to the
+      # public https origin and set SPOTIFY_REDIRECT_URI/DISCORD_REDIRECT_URI
+      # in .env to the matching /api callback URLs.
+      APP_ORIGIN: http://127.0.0.1:5173
+      API_ORIGIN: http://127.0.0.1:3001
     depends_on:
       migrate:
         condition: service_completed_successfully
