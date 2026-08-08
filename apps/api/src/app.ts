@@ -55,8 +55,10 @@ export async function buildApp(config = loadConfig()): Promise<WardfyApp> {
     logger: {
       level: config.NODE_ENV === 'development' ? 'info' : 'warn',
       redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers.set-cookie'],
+      // Fastify v6+ deprecates top-level `disableRequestLogging`; prefer logController
     },
     requestIdHeader: 'x-request-id',
+    disableRequestLogging: config.DISABLE_REQUEST_LOGGING,
   }) as unknown as WardfyApp;
 
   const prisma = getPrisma();

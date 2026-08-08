@@ -46,8 +46,9 @@ const envSchema = z.object({
   DISCORD_REDIRECT_URI: z.string().url(),
   // 16 characters is the minimum accepted for backwards compatibility; use a 32-byte random value in production.
   BOT_API_TOKEN: z.string().min(16),
-  PLAYBACK_POLL_INTERVAL_SECONDS: z.coerce.number().int().min(15).max(300).default(30),
+  PLAYBACK_POLL_INTERVAL_SECONDS: z.coerce.number().int().min(1).max(300).default(30),
   SPOTIFY_SYNC_CONCURRENCY: z.coerce.number().int().min(1).max(20).default(4),
+  DISABLE_REQUEST_LOGGING: z.coerce.boolean().default(false),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

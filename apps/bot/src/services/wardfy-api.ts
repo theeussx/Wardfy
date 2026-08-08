@@ -201,7 +201,7 @@ export class WardfyApi {
         'x-wardfy-bot-token': this.config.BOT_API_TOKEN,
         ...init.headers,
       },
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(1_000),
     });
     if (response.status === 204) return undefined as T;
     if (!response.ok) {
