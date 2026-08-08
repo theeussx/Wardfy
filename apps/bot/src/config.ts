@@ -22,7 +22,7 @@ const schema = z.object({
   API_ORIGIN: z.string().url(),
   // Must match the API token. Existing 16+ character tokens remain supported.
   BOT_API_TOKEN: z.string().min(16).optional(),
-  ACTIVITY_SYNC_INTERVAL_SECONDS: z.coerce.number().int().min(15).max(300).default(30),
+  ACTIVITY_SYNC_INTERVAL_SECONDS: z.coerce.number().int().min(1).max(300).default(30),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 });
 

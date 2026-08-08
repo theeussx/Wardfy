@@ -45,8 +45,8 @@ export const commandDefinitions = [
     .addIntegerOption((option) =>
       option
         .setName('intervalo')
-        .setDescription('Frequência de atualização em segundos (15–300)')
-        .setMinValue(15)
+        .setDescription('Frequência de atualização em segundos (1–300)')
+        .setMinValue(1)
         .setMaxValue(300),
     ),
 ].map((command) => command.toJSON());
