@@ -44,15 +44,16 @@ services:
         value: postgresql://wardfy:wardfy@postgres:5432/wardfy?schema=public
       - key: REDIS_URL
         value: redis://redis:6379
-      # Atualize esses 3 valores no Dashboard da Render após o primeiro deploy
+      # Atualize esses valores no Dashboard da Render após o primeiro deploy
       - key: APP_ORIGIN
         value: https://wardfy-web.onrender.com
       - key: API_ORIGIN
         value: https://wardfy-api.onrender.com
+      # CORREÇÃO: Callbacks do OAuth devem apontar para a API (-api), não para o WEB (-web)
       - key: SPOTIFY_REDIRECT_URI
-        value: https://wardfy-web.onrender.com/api/v1/auth/spotify/callback
+        value: https://wardfy-api.onrender.com/api/v1/auth/spotify/callback
       - key: DISCORD_REDIRECT_URI
-        value: https://wardfy-web.onrender.com/api/v1/auth/discord/callback
+        value: https://wardfy-api.onrender.com/api/v1/auth/discord/callback
       - key: VITE_API_PROXY_TARGET
         value: http://api:3001
       # SEGREDOS — configure manualmente no Dashboard da Render (não comite!)
@@ -87,8 +88,9 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # CORREÇÃO: Evite a porta 80 dentro do container por restrições de permissão Root
       - key: PORT
-        value: "80"
+        value: "3000"
     buildFilter:
       paths:
         - apps/web/**
