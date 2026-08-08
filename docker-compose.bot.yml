@@ -1,0 +1,22 @@
+# Bot externo — rode onde quiser (Railway, VPS, outra Render, etc.)
+# Aponte API_ORIGIN para a URL pública do serviço `api` criado no render.yaml
+version: "3.9"
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: apps/bot/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      API_ORIGIN: ${API_ORIGIN:-https://api-xyz.onrender.com}
+      BOT_API_TOKEN: ${BOT_API_TOKEN}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      DISCORD_APPLICATION_ID: ${DISCORD_APPLICATION_ID}
+      DISCORD_DEV_GUILD_ID: ${DISCORD_DEV_GUILD_ID}
+      ACTIVITY_SYNC_INTERVAL_SECONDS: 30
+    # Se quiser banco direto (não obrigatório pelo bot, mas o compose original passa):
+    # DATABASE_URL: ${DATABASE_URL}
+    # REDIS_URL: ${REDIS_URL}
